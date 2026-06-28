@@ -1,0 +1,10 @@
+{
+  "$schema": "https://schemas.analitiq.ai/pipeline/latest.json",
+  "status": "active",
+  "connections": {
+    "source": "wise",
+    "destinations": ["postgresql"]
+  },
+  "streams": [],
+  "schedule": {"type": "manual"}
+}
