@@ -63,11 +63,12 @@ and you do not author anything.
 
    The downloaded files are read-only inputs. Do not edit them.
 
-6. **Validate.** Run the connector validator from the sibling
-   `analitiq-connector-builder` plugin if it is available on the path
-   (`../analitiq-connector-builder/scripts/validate_connector.py`). If
-   not available, skip validation with a note — the pipeline-builder
-   plugin trusts the registry to host valid connectors.
+6. **Validate (optional).** The downloaded connector is a trusted, read-only
+   registry artifact — the connector-creator plugin's CI and the registry own its
+   validity, and pipeline-builder does not schema-validate connectors. For a local
+   check, the published validator's CLI handles connector documents
+   (`analitiq-validate --document connectors/<slug>/definition/connector.json`);
+   otherwise skip with a note.
 7. **Return a summary.** On a successful download, report:
 
    ```jsonc
