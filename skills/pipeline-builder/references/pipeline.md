@@ -93,4 +93,4 @@ For each artifact:
    surface the diagnostics.
 
 The validator is stateless — pass count and discipline live here, not
-in `scripts/validate_pipeline.py`.
+in `scripts/validate.py`.

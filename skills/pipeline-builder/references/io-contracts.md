@@ -101,25 +101,28 @@ the creator returns:
 }
 ```
 
-## `Diagnostics` (output of `scripts/validate_pipeline.py`)
+## `Diagnostics` (output of `scripts/validate.py`)
 
 ```jsonc
 {
   "passed": false,
   "findings": [
     {
-      "validator": "schedule-shape",
+      "validator": "contract-model",
       "severity": "error",
-      "path": "/schedule",
-      "message": "schedule.type='interval' requires interval_minutes; cron_expression must be absent.",
-      "rule_doc": "shared/schedule.md"
+      "path": "/schedule/interval_minutes",
+      "message": "Field required"
     }
   ]
 }
 ```
 
-`severity ∈ {"error", "warning"}`. `passed` is `true` iff no `error`
-findings exist (warnings allowed).
+Each finding is `{validator, severity, path, message}`. `severity ∈ {"error", "warning"}`;
+`passed` is `true` iff no `error` finding exists (warnings allowed — e.g. a draft
+pipeline reported not-runnable). Validator ids include `contract-model`
+(single-document model validation), the `bundle-*` ids (cross-document referential
+checks, run with `--bundle-root`), and `endpoint-id-locator` (the derived
+database-endpoint id gate).
 
 ## `DriftVerdict` (output of `pipeline-drift-classifier`)
 

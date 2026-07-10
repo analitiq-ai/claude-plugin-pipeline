@@ -51,7 +51,7 @@ The schema's `allOf/if-then-else` for `error_handling`:
   positive. Otherwise the retry loop has no wait, which the engine
   rejects.
 
-The `runtime-ranges` Layer 2 validator enforces both rules.
+The contract model enforces both rules.
 
 ## Per-destination override
 

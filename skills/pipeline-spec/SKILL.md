@@ -45,10 +45,10 @@ Every authored document must:
 3. Use **connection UUIDs** in `connections.source` and
    `connections.destinations[]`. Plugin convention is to set these to
    the `connection_id` of the corresponding `connections/<slug>/connection.json`
-   files; the `pipeline-stream-consistency` validator enforces this on
-   `--bundle-root`. The schema itself accepts any non-empty string.
+   files; the bundle referential checks enforce this with `--bundle-root`. The
+   schema itself accepts any non-empty string.
 4. Use **stream UUIDs** in `streams[]` — plugin convention is to set
    these to the `stream_id` of the corresponding `streams/<slug>.json`
    files.
-5. Pass `python scripts/validate_pipeline.py --entity pipeline
-   --document <path>` with zero error findings.
+5. Pass validation (the `pipeline-schema-validator`, entity `pipeline`) with
+   zero error findings.

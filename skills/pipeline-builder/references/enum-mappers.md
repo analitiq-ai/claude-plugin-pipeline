@@ -44,28 +44,19 @@ both methods are always supported.
 
 For database `upsert`, ask the user (or infer from the destination
 endpoint's `primary_keys`) which fields form the conflict resolution
-key set. `conflict_keys` is `[[<field>, …], …]` — a non-empty array of
-non-empty key sets.
+key set. `conflict_keys` is a flat, non-empty list of field names
+(`[<field>, …]`).
 
-## AuthTypeMapper
+## AuthTypeMapper (informational)
 
-The orchestrator does **not** author the connector's `auth` block —
-that's the connector-builder plugin's job. Here, `AuthTypeMapper`
-selects which `connection-creator` template to use based on the
-downloaded connector's `auth.type`:
+The orchestrator does **not** author the connector's `auth` block — that's the
+connector-builder plugin's job. `connection-creator` routes each connection value
+into `parameters` / `secret_refs` / `selections` by the connector contract's
+`storage` field, so it needs **no** per-auth-type template. The connector's
+`auth.type` is only a hint for which `examples/*.example.json` is the closest
+shape illustration (`api_key`, `basic_auth`, `oauth2_authorization_code`,
+`oauth2_client_credentials`, `jwt`, `db`, `credentials`, `aws_iam` each map to the
+same-named example; `none` → `examples/none.example.json`, parameters only).
 
-| connector.auth.type | → | template |
-|---|---|---|
-| `api_key` | → | `examples/api-key.example.json` |
-| `basic_auth` | → | `examples/basic-auth.example.json` |
-| `oauth2_authorization_code` | → | `examples/oauth2-authorization-code.example.json` |
-| `oauth2_client_credentials` | → | `examples/oauth2-client-credentials.example.json` |
-| `jwt` | → | `examples/jwt.example.json` |
-| `db` | → | `examples/db.example.json` |
-| `credentials` | → | `examples/credentials.example.json` |
-| `aws_iam` | → | `examples/aws-iam.example.json` |
-| `none` | → | `examples/none.example.json` |
-
-The connection-creator agent loads `connection-spec` and reads the
-matching example. Any other `auth.type` value is a contract violation —
-halt and report.
+`connection-creator` loads `connection-spec` and routes by `storage` regardless
+of auth type, so a new auth type needs no plugin change.

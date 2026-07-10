@@ -1,8 +1,9 @@
 # Reserved (server-managed) fields per entity
 
 Authored documents must **never** contain any of these fields. The
-registry stamps them on insert/update. The `reserved-field` Layer 2
-validator (see `scripts/validate_pipeline.py`) enforces this.
+registry stamps them on insert/update. The published contract models are the
+strict *input* variants — they forbid unknown fields, so a leaked server-managed
+field fails validation.
 
 ## Pipeline
 
@@ -21,7 +22,7 @@ validator (see `scripts/validate_pipeline.py`) enforces this.
 - `created_at`
 - `updated_at`
 - `schema_hash`
-- `mapping.assignments_hash` (server-computed, `readOnly`; the schema does not define a top-level `assignments_hash` — `additionalProperties: false` rejects it at Layer 1)
+- `mapping.assignments_hash` (server-computed, `readOnly`; the model rejects a client-authored value)
 - `source_schema_fingerprint`
 - `target_schema_fingerprint`
 - `source_schema_id`
@@ -59,15 +60,16 @@ required.
 - `connection_id`
 - `schema_hash`
 
-`endpoint_id` is **authored** as a slug (`^[a-z0-9][a-z0-9_-]*$`) and is
-required — it serves as the catalog key after the endpoint is
-materialized.
+`endpoint_id` is **authored** — the derived handle
+`slug(schema)__slug(name)[__slug(catalog)]__hash8` (still matching
+`^[a-z0-9][a-z0-9_-]*$`) — and is required; it serves as the catalog key after
+the endpoint is materialized. See `endpoint-spec` / `scripts/endpoint_id.py`.
 
-## Why JSON Schema still has these as `required`
+## Authored shape vs. persisted shape
 
-The published JSON Schemas describe the **canonical post-stamped**
-document including server fields. The validator strips these from
-`required` before running Layer 1 against an authored document, so
-authored docs pass without false errors. The inverse (an authored doc
-containing a server-managed field) is caught by the `reserved-field`
-Layer 2 validator.
+The published JSON Schemas — and the `*Input` contract models they render from —
+describe the **authored** shape (the strict input variant), which already omits
+every server-managed field above. So an authored document validates without any
+special handling, and authoring a server-managed field fails because the models
+forbid unknown fields. The persisted, post-stamped record shape is internal and
+not published.

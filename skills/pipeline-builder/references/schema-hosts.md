@@ -1,34 +1,30 @@
 # Schema host
 
-All Analitiq schemas are served from a single host: `https://schemas.analitiq.ai/`.
+All Analitiq schemas are served from a single host:
+`https://schemas.analitiq.ai/`. Authored documents declare `$schema` against it —
+the URL is locked by a `const` inside each published schema.
 
-| Concern | Host |
+| Concern | Where |
 |---|---|
 | Document's `$schema` declaration | `https://schemas.analitiq.ai/` (locked by a `const` inside the schema) |
-| Validator's schema fetch | `https://schemas.analitiq.ai/` (default in `scripts/validate_pipeline.py`) |
+| Validation | the published `analitiq-validator` + `analitiq-contract-models` packages — **offline**, model-driven; no schema is ever fetched |
 
-## How to verify locally
+## How validation works
 
-```bash
-python scripts/validate_pipeline.py \
-  --entity pipeline \
-  --document path/to/pipeline.json
-# default schema-url:
-#   https://schemas.analitiq.ai/pipeline/latest.json
-```
-
-Override the fetch host if needed:
+The plugin does **not** fetch or cache schemas. `analitiq-validator` validates
+each document against the bundled Pydantic contract models — the same source of
+truth the published JSON Schemas are rendered from. The
+`pipeline-schema-validator` agent runs the plugin's adapter (`scripts/validate.py`),
+which self-installs the pinned validator into a managed virtualenv on first use
+and is offline thereafter:
 
 ```bash
-python scripts/validate_pipeline.py \
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/validate.py" \
   --entity pipeline \
   --document path/to/pipeline.json \
-  --schema-url https://schemas.analitiq.ai/pipeline/latest.json
+  [--bundle-root .]
 ```
 
-## Cache notes
-
-The validator caches fetched schemas under
-`~/.cache/analitiq/schemas/<sha256-prefix>.json`. The cache key is the
-**URL**. Use `--no-cache` to force a fresh fetch — useful when you
-suspect schema drift.
+Because validation is offline, a document's declared `$schema` URL is a label,
+not a fetch target — keep it in sync with the entity so the file stays
+self-describing.
