@@ -198,3 +198,13 @@ def test_bundle_malformed_sibling(tmp_path):
     diag = V.diagnostics_for("pipeline", doc, bundle_root=tmp_path)
     assert not diag["passed"]
     assert any(f["validator"] == "document" for f in diag["findings"]), diag["findings"]
+
+
+def test_bundle_non_dict_sibling(tmp_path):
+    doc = _build_bundle(tmp_path)
+    # valid JSON but not an object → the "is not a JSON object" branch (connection path)
+    (tmp_path / "connections/postgresql/connection.json").write_text("[]")
+    diag = V.diagnostics_for("pipeline", doc, bundle_root=tmp_path)
+    assert not diag["passed"]
+    assert any(f["validator"] == "document" and "not a JSON object" in f["message"]
+               for f in diag["findings"]), diag["findings"]
