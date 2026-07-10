@@ -36,9 +36,9 @@ Closed enum:
 
 ## `rules[].field`
 
-Must match an `assignments[].target.path` in the same mapping. The
-`mapping-shape` validator emits an error for `field` values that don't
-resolve to a mapped output. This guards against silent typos.
+Must match an `assignments[].target.path` in the same mapping — a `field` that
+resolves to no mapped output is a silent typo. Endpoint/field resolution happens
+server-side at save time.
 
 ## `error_handling`
 

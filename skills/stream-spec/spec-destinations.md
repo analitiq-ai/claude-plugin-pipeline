@@ -7,7 +7,7 @@
       "endpoint_ref": { /* see spec-endpoint-refs.md */ },
       "write": {
         "mode": "insert" | "upsert" | "<api write mode>",
-        "conflict_keys": [["id"]]                 // required when mode is `upsert` or an API mode that needs conflict targets
+        "conflict_keys": ["id"]                    // required for a database upsert; forbidden for insert and for API destinations
       },
       "execution": {                              // optional; per-destination override of pipeline.runtime.batching
         "batch_size": 1000,                       // range [1, 100000]
@@ -18,9 +18,8 @@
 }
 ```
 
-`destinations` is a non-empty array. Tuple `(scope, connection_id, endpoint_id)`
-must be unique across entries — enforced by the `endpoint-ref-shape` Layer 2
-validator (the published schema does not declare `uniqueItems` on this array).
+`destinations` is a non-empty array. Keep each entry's `endpoint_ref` distinct
+within the stream (the published schema does not declare `uniqueItems`).
 
 ## `write.mode`
 
@@ -35,20 +34,19 @@ intent to one of these.
 
 ## `write.conflict_keys`
 
-Required when the mode resolves conflicts (database `upsert`; API
-endpoints that document it). Shape:
+**Required for a database `upsert`; forbidden for a database `insert` and for
+every API (`scope: connector`) destination** (an API destination's conflict key
+is endpoint-owned). The `StreamDestination` contract model enforces this — it
+knows the destination scope. Shape — a **single composite key set**, a non-empty
+array of destination field names:
 
 ```jsonc
-[["id"], ["org_id", "external_id"]]
+["id"]                       // or ["org_id", "external_id"] for a composite key
 ```
 
-A non-empty array of non-empty key sets. Each inner array is one
-candidate key. Multiple key sets indicate that any of them is sufficient
-to identify a row.
-
-Every key field must exist in the destination endpoint's schema.
-Field-existence is enforced server-side at save time; the local
-validator does **not** resolve field names against endpoint files.
+Multiple alternative key sets are out of scope in the current contract. Every key
+field must exist in the destination endpoint's schema; that is resolved
+server-side at save time, not by the local validator.
 
 ## `execution` (per-destination override)
 

@@ -1,7 +1,10 @@
 # Filter operator vocabularies
 
-Filters declared in `source.filters[]` use a closed operator set per
-endpoint kind. The `filter-operators` Layer 2 validator enforces this.
+Filters declared in `source.filters[]` draw from a per-endpoint-kind operator
+vocabulary. The endpoint contract declares which operators each field or
+parameter accepts, enforced server-side at save time (the stream schema leaves
+`operator` an open string, so the local validator does not check it). Stick to
+the vocabularies below.
 
 ## Database (`scope: connection`)
 

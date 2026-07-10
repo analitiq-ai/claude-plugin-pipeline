@@ -23,9 +23,10 @@ document conforming to `https://schemas.analitiq.ai/stream/latest.json`.
 
 - Top-level shape: `$schema`, `stream_id`, `display_name`, `description`,
   `pipeline_id`, `source`, `destinations`, `mapping`, `status`, `tags`.
-- The minimal v1 mapping expression vocabulary: `{op: "get", path: "<source field>"}`
-  and `{arrow_type, value}` constants. `arrow_type` is a fully-qualified
-  Apache Arrow canonical type string (see `spec-mapping.md`).
+- The mapping expression vocabulary: `{op: "get", path}` (the default) plus
+  `pipe`/`fn` conversion chains, and `{arrow_type, value}` constants.
+  `arrow_type` is a fully-qualified Apache Arrow canonical type string (see
+  `spec-mapping.md`).
 - The closed source-filter operator vocabularies per endpoint kind.
 
 ## What this skill does NOT cover
@@ -49,7 +50,9 @@ Every authored document must:
 3. Use **connection UUIDs** in every `endpoint_ref.connection_id` — they
    must match the `connection_id` of the corresponding connection
    document.
-4. Use **endpoint slugs** in every `endpoint_ref.endpoint_id` — these
-   match `endpoint_id` on the referenced endpoint document.
-5. Pass `python scripts/validate_pipeline.py --entity stream
-   --document <path>` with zero error findings.
+4. Shape each `endpoint_ref` by its `scope` (see `spec-endpoint-refs.md`): a
+   `connector` ref carries `endpoint_id` (the connector endpoint key); a
+   `connection` ref carries the endpoint's `database_object` plus the derived
+   `endpoint_id` handle.
+5. Pass validation (the `pipeline-schema-validator`, entity `stream`) with zero
+   error findings.
