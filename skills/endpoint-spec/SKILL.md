@@ -50,9 +50,12 @@ Every authored document must:
 
 1. Declare `$schema: "https://schemas.analitiq.ai/database-endpoint/latest.json"`
    (the schema marks this as a `const`-required field).
-2. Include `endpoint_id` (`^[a-z0-9][a-z0-9_-]*$`), `database_object`,
-   `columns` (non-empty), and `$schema` — these are the schema-required
-   top-level fields.
+2. Include `endpoint_id`, `database_object`, `columns` (non-empty), and
+   `$schema` — the schema-required top-level fields. `endpoint_id` is the
+   **derived** handle from `scripts/endpoint_id.py`
+   (`slug(schema)__slug(name)[__slug(catalog)]__hash8`), not a hand-authored
+   slug.
 3. Preserve identifier strings verbatim from introspection.
-4. Pass `python scripts/validate_pipeline.py --entity database_endpoint
-   --document <path>` with zero error findings.
+4. Pass validation (the `pipeline-schema-validator`, entity `database_endpoint`)
+   with zero error findings — the validator recomputes and enforces the derived
+   `endpoint_id`.
