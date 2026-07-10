@@ -4,9 +4,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Repo Is
 
-This repository is the `analitiq-pipeline-builder` Claude Code plugin: it authors **pipeline**, **stream**, **connection**, and **database-endpoint** JSON documents conforming to the published Analitiq schema contract at `schemas.analitiq.ai`. It downloads pre-defined connectors from the DIP registry (`analitiq-dip-registry` GitHub org) and wires them into complete pipelines. It is a **local authoring tool only** — it does **not** create connectors and calls **no** registration APIs. The plugin is installed via `.claude-plugin/plugin.json`.
+This repository is the `analitiq-pipeline-builder` Claude Code plugin: a **local authoring tool for creating and running pipelines and streams** that move data between Analitiq DIP connectors. It authors **pipeline**, **stream**, **connection**, and **database-endpoint** JSON documents conforming to the published Analitiq schema contract at `schemas.analitiq.ai`, downloads pre-defined connectors from the DIP registry, and wires them into complete pipelines. It calls **no** registration APIs and it does **not** create connectors.
 
-Creating connectors is a separate concern owned by the `analitiq-connector-builder` plugin, which lives in its own repository: [analitiq-ai/claude-plugin-connector-creator](https://github.com/analitiq-ai/claude-plugin-connector-creator).
+Connectors are the building blocks this plugin wires together — it never authors them:
+
+- **Published in the DIP registry** — one repository per connector under the `analitiq-dip-registry` GitHub org: <https://github.com/orgs/analitiq-dip-registry/repositories>. `registry-browser` downloads them read-only.
+- **Authored by a separate plugin** — the Analitiq connector-creator plugin (`analitiq-connector-builder`), which lives in its own repository: <https://github.com/analitiq-ai/claude-plugin-connector>.
+
+This repository lives at <https://github.com/analitiq-ai/claude-plugin-pipeline> (public). The plugin is installed via `.claude-plugin/plugin.json`.
+
+## Design Principles
+
+- **Contract-first.** Every authored document — pipeline, stream, connection, database-endpoint — is written against the published JSON Schemas at `schemas.analitiq.ai`. The schema is the spec. Never invent shapes the contract doesn't define; if the contract can't express something a pipeline needs, that's a contract gap to raise, not a freeform workaround.
+- **Declarative-first, author no code.** The plugin emits declarative JSON that the Analitiq engine runs. Connector behavior — including anything quirky about a source or destination system — belongs to the connector package in the DIP registry, never to a pipeline or stream.
+- **Secrets are referenced, never embedded.** Connection secrets are written as placeholders in the document's `values` envelope and templated into a gitignored `.secrets/credentials.json`; the user (or CI) resolves them before submission. The plugin never holds, logs, or ships a secret value. (See "Connection secrets workflow" under Key Concepts.)
+- **Deterministic, idempotent, no legacy.** Authored artifacts are reproducible and safe to re-run. No backward-compatibility or legacy shims unless explicitly instructed.
+- **Stay in your lane.** This plugin authors pipelines / streams / connections / endpoints only. Connector documents come from the registry; creating them belongs to the connector-creator plugin. Agents must never author JSON that belongs to another agent's responsibility.
 
 ## Agents
 
@@ -95,6 +108,25 @@ The plugin's package version in `.claude-plugin/plugin.json` is bumped on PR mer
 - Test org_id: `d7a11991-2795-49d1-a858-c7e58ee5ecc6`.
 - Agents must never author JSON that belongs to another agent's responsibility.
 - The orchestrator never deletes or overwrites user files (especially `.secrets/`); it halts and asks instead.
+
+## GitHub
+
+- **This repo** (public): <https://github.com/analitiq-ai/claude-plugin-pipeline>
+- **DIP registry** — the connectors this plugin wires together, one repo per connector: <https://github.com/orgs/analitiq-dip-registry/repositories>
+- **Connector-creator plugin** — authors those connectors (separate concern, separate repo): <https://github.com/analitiq-ai/claude-plugin-connector>
+- **Analitiq Infra:** <https://github.com/analitiq-ai/analitiq-infra>
+- **Analitiq Engine:** <https://github.com/analitiq-ai/analitiq-engine>
+
+## Published Schema Contracts
+
+Every authored document declares `$schema` against the `schemas.analitiq.ai` host:
+
+- <https://schemas.analitiq.ai/pipeline/latest.json>
+- <https://schemas.analitiq.ai/stream/latest.json>
+- <https://schemas.analitiq.ai/connection/latest.json>
+- <https://schemas.analitiq.ai/database-endpoint/latest.json>
+- <https://schemas.analitiq.ai/api-endpoint/latest.json> — not authored; comes from the connector document
+- <https://schemas.analitiq.ai/connector/latest.json> — not authored; owned by the connector-creator plugin
 
 ## PR Review Process
 
