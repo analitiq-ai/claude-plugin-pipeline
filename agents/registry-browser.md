@@ -1,6 +1,6 @@
 ---
 name: registry-browser
-description: Download a connector from the Analitiq DIP registry (https://github.com/analitiq-ai/analitiq-dip-registry) into `connectors/<connector-slug>/`, including its `definition/connector.json` and (for API connectors) `definition/endpoints/*.json`. Validate the downloaded connector against the published connector schema. Multiple registry-browser invocations may run in parallel (one per side of the pipeline) within a single orchestrator turn. Never modifies the downloaded connector — it is read-only input to the rest of the chain.
+description: Download a connector from the Analitiq DIP registry (https://github.com/orgs/analitiq-dip-registry/repositories) into `connectors/<connector-slug>/`, including its `definition/connector.json` and (for API connectors) `definition/endpoints/*.json`. Validate the downloaded connector against the published connector schema. Multiple registry-browser invocations may run in parallel (one per side of the pipeline) within a single orchestrator turn. Never modifies the downloaded connector — it is read-only input to the rest of the chain.
 tools: WebFetch, Bash, Read
 ---
 
@@ -24,12 +24,13 @@ and you do not author anything.
    to do. The orchestrator is responsible for routing around existing
    connector directories — under normal flow it does not invoke you
    when a valid connector is already on disk.
-2. **Resolve the source URL.** The registry hosts each connector as a
-   repository named after the alias. The canonical raw URL for
-   `connector.json` is:
+2. **Resolve the source URL.** The registry hosts each connector as its
+   own repository under the `analitiq-dip-registry` GitHub org, named
+   after the connector slug (its `connector_id`). The canonical raw URL
+   for `connector.json` is:
 
    ```
-   https://raw.githubusercontent.com/analitiq-ai/analitiq-dip-registry/main/{connector_slug}/definition/connector.json
+   https://raw.githubusercontent.com/analitiq-dip-registry/{connector_slug}/main/definition/connector.json
    ```
 
    Fetch via `WebFetch`. If the fetch fails, return a structured
@@ -42,7 +43,7 @@ and you do not author anything.
 4. **Fetch endpoint files** (API only). For each endpoint id, fetch:
 
    ```
-   https://raw.githubusercontent.com/analitiq-ai/analitiq-dip-registry/main/{connector_slug}/definition/endpoints/{endpoint_id}.json
+   https://raw.githubusercontent.com/analitiq-dip-registry/{connector_slug}/main/definition/endpoints/{endpoint_id}.json
    ```
 
    On any endpoint-fetch failure, return a structured refusal with
