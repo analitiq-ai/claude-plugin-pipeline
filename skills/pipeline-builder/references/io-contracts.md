@@ -31,7 +31,7 @@ own required sub-shape.
     "schema": "public",                         // database only
     "write": {
       "mode": "upsert",
-      "conflict_keys": [["id"]]                 // required when mode requires it
+      "conflict_keys": ["id"]                   // flat list of field names; required for a database upsert
     }
   },
   "schedule": {

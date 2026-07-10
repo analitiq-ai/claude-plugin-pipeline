@@ -55,19 +55,24 @@ def _venv_has_pin(py: Path, version: str) -> bool:
 def ensure_deps_or_reexec(script_path: str) -> None:
     """Guarantee the pinned validator is importable, re-exec'ing `script_path`
     under a managed venv if the current interpreter lacks it. Raises RuntimeError
-    only if the package is still missing after a bootstrap+re-exec (no network or
-    pip unavailable)."""
+    if the managed-venv install fails (no network / pip unavailable) or the package
+    is still missing after the re-exec."""
     version = _pinned_version()
     if _importable(version):
         return
     py = _managed_venv_python()
     if not _venv_has_pin(py, version):
-        py.parent.parent.mkdir(parents=True, exist_ok=True)
-        subprocess.run([sys.executable, "-m", "venv", str(py.parent.parent)],
-                       check=True, stdout=sys.stderr, stderr=sys.stderr)
-        subprocess.run([str(py), "-m", "pip", "install", "--quiet",
-                        "--disable-pip-version-check", "--pre", VALIDATOR_PIN],
-                       check=True, stdout=sys.stderr, stderr=sys.stderr)
+        try:
+            py.parent.parent.mkdir(parents=True, exist_ok=True)
+            subprocess.run([sys.executable, "-m", "venv", str(py.parent.parent)],
+                           check=True, stdout=sys.stderr, stderr=sys.stderr)
+            subprocess.run([str(py), "-m", "pip", "install", "--quiet",
+                            "--disable-pip-version-check", "--pre", VALIDATOR_PIN],
+                           check=True, stdout=sys.stderr, stderr=sys.stderr)
+        except (subprocess.CalledProcessError, OSError) as exc:
+            raise RuntimeError(
+                f"could not install {VALIDATOR_PIN} into a managed venv ({exc}); "
+                f"install it manually with: pip install --pre {VALIDATOR_PIN}") from exc
     if os.environ.get(_REEXEC_SENTINEL):
         raise RuntimeError(
             "analitiq-validator is not importable after bootstrap; install it "

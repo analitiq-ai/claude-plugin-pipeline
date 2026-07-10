@@ -87,22 +87,49 @@ def _endpoint_findings(doc, document_path: Path) -> list[dict]:
     return validate_document(doc, doc_path=document_path.resolve())
 
 
-def _assemble_bundle(pipeline_doc: dict, document_path: Path, root: Path) -> dict:
+def _read_bundle_member(path: Path, findings: list[dict]) -> dict | None:
+    """Read one sibling bundle document. On an unreadable/invalid file or a
+    non-object payload, append an error finding and return None — so a malformed
+    sibling becomes a clear diagnostic instead of an uncaught traceback or a
+    silently dropped document."""
+    try:
+        doc = _read_json(path)
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError) as exc:
+        findings.append(_finding("document", "error", "", f"Cannot read {path.name}: {exc}"))
+        return None
+    if not isinstance(doc, dict):
+        findings.append(_finding("document", "error", "", f"{path.name} is not a JSON object"))
+        return None
+    return doc
+
+
+def _assemble_bundle(pipeline_doc: dict, document_path: Path, root: Path) -> tuple[dict, list[dict]]:
     """Gather the on-disk pipeline bundle the way the engine resolves it at load:
     the pipeline plus its sibling stream documents, every connection, the
     connection-scoped endpoint documents (stamped with their owning connection's
     id, which endpoint documents do not carry themselves), and the downloaded
-    connector identities."""
-    streams = [_read_json(p) for p in sorted((document_path.parent / "streams").glob("*.json"))]
+    connector identities. Returns the bundle plus any read-error findings for
+    malformed siblings."""
+    findings: list[dict] = []
+
+    streams: list[dict] = []
+    for p in sorted((document_path.parent / "streams").glob("*.json")):
+        doc = _read_bundle_member(p, findings)
+        if doc is not None:
+            streams.append(doc)
 
     connections: list[dict] = []
     endpoints: list[dict] = []
     for conn_json in sorted((root / "connections").glob("*/connection.json")):
-        conn = _read_json(conn_json)
+        conn = _read_bundle_member(conn_json, findings)
+        if conn is None:
+            continue
         connections.append(conn)
         connection_id = conn.get("connection_id")
         for ep_json in sorted((conn_json.parent / "endpoints").glob("*.json")):
-            endpoint = _read_json(ep_json)
+            endpoint = _read_bundle_member(ep_json, findings)
+            if endpoint is None:
+                continue
             # Endpoint documents omit connection_id (server-managed); supply the
             # owning connection's id so the bundle's endpoint-ref check can resolve
             # connection-scoped references.
@@ -110,25 +137,33 @@ def _assemble_bundle(pipeline_doc: dict, document_path: Path, root: Path) -> dic
             endpoint.setdefault("scope", "connection")
             endpoints.append(endpoint)
 
+    # Connectors supply identity only, and the directory slug already is that
+    # identity — so a malformed connector.json is best-effort skipped (its slug
+    # still counts), not a bundle error.
     connectors: set[str] = set()
     for conn_json in sorted((root / "connectors").glob("*/definition/connector.json")):
         connectors.add(conn_json.parent.parent.name)  # directory slug
-        cid = _read_json(conn_json).get("connector_id")
+        try:
+            cid = _read_json(conn_json).get("connector_id")
+        except (OSError, json.JSONDecodeError, UnicodeDecodeError, AttributeError):
+            continue
         if isinstance(cid, str) and cid:
             connectors.add(cid)
 
-    return {
+    bundle = {
         "pipeline": pipeline_doc,
-        "streams": [s for s in streams if isinstance(s, dict)],
+        "streams": streams,
         "connections": connections,
         "connectors": sorted(connectors),
         "endpoints": endpoints,
     }
+    return bundle, findings
 
 
 def _bundle_findings(pipeline_doc: dict, document_path: Path, root: Path) -> list[dict]:
     from analitiq.validator import validate_pipeline_bundle
-    findings = validate_pipeline_bundle(_assemble_bundle(pipeline_doc, document_path, root))
+    bundle, findings = _assemble_bundle(pipeline_doc, document_path, root)
+    findings = findings + validate_pipeline_bundle(bundle)
     # The bundle validator also enforces runnability (status must be 'active').
     # This plugin authors draft bundles by design, so for a non-active pipeline the
     # "not runnable" verdict is expected, not an authoring error — surface it as a

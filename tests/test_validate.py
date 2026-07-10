@@ -146,3 +146,55 @@ def test_unreadable_document(tmp_path):
     diag = V.diagnostics_for("pipeline", tmp_path / "does_not_exist.json")
     assert not diag["passed"]
     assert diag["findings"][0]["validator"] == "document"
+
+
+def test_cli_main_valid(tmp_path, capsys):
+    p = _write(tmp_path, "pipeline.json", PIPELINE)
+    rc = V.main(["--entity", "pipeline", "--document", str(p)])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert json.loads(out)["passed"] is True  # stdout carries exactly one JSON object
+
+
+def test_cli_main_invalid_exit_code(tmp_path, capsys):
+    bad = {"$schema": f"{H}/connection/latest.json", "connector_id": "x", "values": {}}
+    p = _write(tmp_path, "connection.json", bad)
+    rc = V.main(["--entity", "connection", "--document", str(p)])
+    assert rc == 1
+    assert json.loads(capsys.readouterr().out)["passed"] is False
+
+
+def test_cli_usage_error(tmp_path):
+    with pytest.raises(SystemExit) as excinfo:
+        V.main(["--document", "x.json"])  # missing required --entity
+    assert excinfo.value.code == 2
+
+
+def test_endpoint_id_helper(capsys):
+    import endpoint_id  # sibling of validate.py on sys.path
+    rc = endpoint_id.main(["--schema", "public", "--name", "orders"])
+    out = json.loads(capsys.readouterr().out)
+    assert rc == 0
+    assert out["endpoint_id"] == EID
+    assert out["database_object"]["name"] == "orders"
+
+
+def test_active_pipeline_not_runnable_stays_error(tmp_path):
+    doc = _build_bundle(tmp_path)  # the bundled stream is draft
+    pipe = json.loads(doc.read_text())
+    pipe["status"] = "active"
+    doc.write_text(json.dumps(pipe))
+    diag = V.diagnostics_for("pipeline", doc, bundle_root=tmp_path)
+    # an active pipeline with no runnable stream is a real error — the draft-status
+    # downgrade must NOT fire here
+    assert not diag["passed"]
+    assert any(f["validator"] == "bundle-pipeline" and f["severity"] == "error"
+               for f in diag["findings"]), diag["findings"]
+
+
+def test_bundle_malformed_sibling(tmp_path):
+    doc = _build_bundle(tmp_path)
+    (tmp_path / "pipelines/p/streams/orders.json").write_text("{ not valid json")
+    diag = V.diagnostics_for("pipeline", doc, bundle_root=tmp_path)
+    assert not diag["passed"]
+    assert any(f["validator"] == "document" for f in diag["findings"]), diag["findings"]
