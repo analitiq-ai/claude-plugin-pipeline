@@ -1,6 +1,6 @@
 # Analitiq Pipeline Builder Plugin
 
-A Claude Code plugin for **creating and running data pipelines and streams**
+A Claude Code plugin for **creating and editing data pipelines and streams**
 between [Analitiq DIP](https://github.com/orgs/analitiq-dip-registry/repositories)
 connectors. Describe a source and a destination in plain language; the plugin
 downloads the connectors from the registry, interviews you for the details, and
@@ -33,9 +33,13 @@ The plugin then:
 3. **Authors** a connection per side (with a `.secrets/credentials.json`
    template you fill in), the endpoint documents, the pipeline shell, and one
    stream per endpoint.
-4. **Validates** every artifact against the published JSON Schemas plus a layer
-   of semantic checks.
+4. **Validates** every artifact against the published contract (the offline
+   `analitiq-validator` package), including cross-document referential checks.
 5. **Writes files** to disk — only once everything passes.
+
+You can also **edit** an existing pipeline in place — e.g. "change the schedule
+to hourly" or "add a stream for the customers table". The plugin changes only
+what you ask and re-validates; it never regenerates or overwrites your secrets.
 
 Output lands under `connections/`, `pipelines/`, and (read-only) `connectors/`.
 Fill in the `.secrets/` templates, then submit the connections and pipeline to
@@ -44,18 +48,19 @@ documented in [CLAUDE.md](CLAUDE.md).
 
 ## Validate manually
 
-The bundled validator runs Draft 2020-12 JSON Schema plus semantic rules:
+Validation runs the published, offline `analitiq-validator` package through a
+thin adapter (the plugin self-installs it on first use):
 
 ```bash
-python scripts/validate_pipeline.py \
+python3 scripts/validate.py \
   --entity pipeline \
   --document path/to/pipeline.json \
   --bundle-root path/to/project
 ```
 
-Output is a single `Diagnostics` JSON object; exit `0` iff `passed: true`.
-Tests live under `tests/pipeline_validator/` — run with `pytest`. The complete
-set of validators is listed in [CLAUDE.md](CLAUDE.md).
+Output is a single `Diagnostics` JSON object; exit `0` iff `passed: true`. Tests
+live under `tests/` — run with `pip install -r requirements-dev.txt && pytest`.
+How validation dispatches per entity is documented in [CLAUDE.md](CLAUDE.md).
 
 ## How it fits together
 
