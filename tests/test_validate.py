@@ -204,6 +204,21 @@ def test_active_pipeline_not_runnable_stays_error(tmp_path):
                for f in diag["findings"]), diag["findings"]
 
 
+def test_active_pipeline_runnable_bundle_passes(tmp_path):
+    # positive active path: an active pipeline whose referenced stream is itself
+    # active is runnable, so require_runnable=True must accept it (no false reject)
+    doc = _build_bundle(tmp_path)
+    stream_path = tmp_path / "pipelines/p/streams/orders.json"
+    stream = json.loads(stream_path.read_text())
+    stream["status"] = "active"
+    stream_path.write_text(json.dumps(stream))
+    pipe = json.loads(doc.read_text())
+    pipe["status"] = "active"
+    doc.write_text(json.dumps(pipe))
+    diag = V.diagnostics_for("pipeline", doc, bundle_root=tmp_path)
+    assert diag["passed"], diag["findings"]
+
+
 def test_bundle_malformed_sibling(tmp_path):
     doc = _build_bundle(tmp_path)
     (tmp_path / "pipelines/p/streams/orders.json").write_text("{ not valid json")
