@@ -270,9 +270,16 @@ and leaves everything else — including `.secrets/` — untouched.
 3. **Never** change an identity field (`pipeline_id` / `stream_id` /
    `connection_id`, `connector_id`, or a stream's parent `pipeline_id`). A
    changed identity is a new artifact, not an edit — halt and confirm.
-4. **Re-validate** every touched document via `pipeline-schema-validator` (and
-   the whole bundle with `bundle_root: .` when a pipeline or stream changed),
-   with the same ≤ 5 fix-pass loop. Write only once validation is clean.
+4. **Re-validate.** Run `pipeline-schema-validator` on every touched document,
+   with the same ≤ 5 fix-pass loop. When a pipeline or stream changed, also
+   validate its **referenced closure** — every connection the pipeline references
+   (public and private) and every connection-scoped private endpoint those
+   connections own — each against its own contract (entities `connection` /
+   `database_endpoint`), which catches a stale or broken referenced artifact; plus
+   the whole bundle with `bundle_root: .`, which additionally catches a mis-named
+   endpoint file whose name no longer matches its `endpoint_id` (the engine locates
+   it by filename stem). Both surface at edit time instead of at engine runtime.
+   Write only once validation is clean.
 5. Report exactly which files changed and which were left untouched.
 
 ## Output

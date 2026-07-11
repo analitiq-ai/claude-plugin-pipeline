@@ -121,8 +121,10 @@ Each finding is `{validator, severity, path, message}`. `severity ∈ {"error", 
 `passed` is `true` iff no `error` finding exists (a `warning` does not fail
 validation). Validator ids include `contract-model`
 (single-document model validation), the `bundle-*` ids (cross-document referential
-checks, run with `--bundle-root`), and `endpoint-id-locator` (the derived
-database-endpoint id gate).
+checks, run with `--bundle-root`), `endpoint-id-locator` (the derived
+database-endpoint id gate), and `endpoint-filename` (a connection-scoped endpoint
+file must be named `<endpoint_id>.json`, since the engine locates it by filename
+stem).
 
 ## `DriftVerdict` (output of `pipeline-drift-classifier`)
 
