@@ -171,10 +171,10 @@ def test_bundle_endpoint_filename_mismatch(tmp_path):
     assert {f["validator"] for f in diag["findings"] if f["severity"] == "error"} == {"endpoint-filename"}
 
 
-def test_bundle_endpoint_missing_id_defers(tmp_path):
-    # the guard defers a missing/empty endpoint_id to the contract model (no false
-    # endpoint-filename finding); the malformed state is still caught referentially,
-    # never silently passed
+def test_bundle_endpoint_missing_id_warns(tmp_path):
+    # a missing/unusable endpoint_id yields an endpoint-filename *warning* (the shared
+    # gate can't verify the name), not an error; the malformed state is still caught as
+    # an error referentially, never silently passed
     doc = _build_bundle(tmp_path)
     ep_dir = tmp_path / "connections/postgresql/definition/endpoints"
     data = json.loads((ep_dir / f"{EID}.json").read_text())
@@ -182,7 +182,10 @@ def test_bundle_endpoint_missing_id_defers(tmp_path):
     (ep_dir / f"{EID}.json").unlink()
     (ep_dir / "whatever.json").write_text(json.dumps(data))
     diag = V.diagnostics_for("pipeline", doc, bundle_root=tmp_path)
-    assert not any(f["validator"] == "endpoint-filename" for f in diag["findings"]), diag["findings"]
+    assert any(f["validator"] == "endpoint-filename" and f["severity"] == "warning"
+               for f in diag["findings"]), diag["findings"]
+    assert not any(f["validator"] == "endpoint-filename" and f["severity"] == "error"
+                   for f in diag["findings"]), diag["findings"]
     assert not diag["passed"]
 
 
