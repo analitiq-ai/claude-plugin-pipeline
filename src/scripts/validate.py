@@ -188,7 +188,9 @@ def _connector_endpoint_sets(root: Path) -> dict[str, set[str]]:
     """Map each downloaded connector — by directory slug **and** its authored
     `connector_id` — to the set of endpoint ids it publishes on disk (each
     `connectors/<slug>/definition/endpoints/*.json` contributes both its filename
-    stem and its `endpoint_id` field, which the published gate keeps equal).
+    stem and its `endpoint_id` field, which the connector's own filename gate keeps
+    equal for well-formed registry connectors — this adapter records both to stay
+    correct even if a malformed connector let them diverge).
 
     A connector whose `definition/endpoints/` directory is absent or empty is
     **omitted**, not recorded as an empty set: its endpoint set is *unknown* here
@@ -223,8 +225,8 @@ def _connector_endpoint_sets(root: Path) -> dict[str, set[str]]:
     return sets
 
 
-def _check_connector_scoped_endpoints(streams, connections,
-                                      connector_endpoint_sets: dict[str, set[str]]) -> list[dict]:
+def _check_connector_endpoint_refs(streams, connections,
+                                   connector_endpoint_sets: dict[str, set[str]]) -> list[dict]:
     """Verify every `scope='connector'` stream endpoint_ref names an endpoint that
     actually exists in the referenced connector's on-disk endpoint set. Emits a
     `connector-endpoint-ref` **warning** (never an error) per unresolved ref, with a
@@ -289,7 +291,7 @@ def _bundle_findings(pipeline_doc: dict, document_path: Path, root: Path) -> lis
     # only, so scope='connector' endpoint refs go unresolved. The plugin has the
     # downloaded connector endpoint files, so verify those refs here and warn (with an
     # alignment suggestion) rather than error — connectors are trusted, pinned at runtime.
-    findings += _check_connector_scoped_endpoints(
+    findings += _check_connector_endpoint_refs(
         bundle["streams"], bundle["connections"], _connector_endpoint_sets(root))
     return findings
 

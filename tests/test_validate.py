@@ -241,6 +241,41 @@ def test_bundle_connector_endpoint_case_mismatch_suggests(tmp_path):
     assert len(warn) == 1 and "'transfers'" in warn[0]["message"], diag["findings"]
 
 
+def test_bundle_connector_endpoint_no_close_match_still_warns(tmp_path):
+    # a wrong ref against a KNOWN endpoint set must still warn even when no endpoint is
+    # a close match — the suggestion is simply omitted. This pins the `suggestion=None`
+    # branch so a "only append when there's a suggestion" refactor can't silently drop
+    # warnings on the most-wrong refs.
+    doc = _build_bundle(tmp_path)
+    _add_wise_endpoint(tmp_path, "transfers")
+    stream_path = tmp_path / "pipelines/p/streams/orders.json"
+    stream = json.loads(stream_path.read_text())
+    stream["source"]["endpoint_ref"]["endpoint_id"] = "zzz"  # no close match to 'transfers'
+    stream_path.write_text(json.dumps(stream))
+    diag = V.diagnostics_for("pipeline", doc, bundle_root=tmp_path)
+    warn = [f for f in diag["findings"] if f["validator"] == "connector-endpoint-ref"]
+    assert len(warn) == 1 and warn[0]["severity"] == "warning", diag["findings"]
+    assert "Did you mean" not in warn[0]["message"], warn[0]["message"]
+    assert diag["passed"]
+
+
+def test_bundle_connector_endpoint_resolves_by_connector_id_not_dir_slug(tmp_path):
+    # the connector's directory slug (wise-live) differs from the connector_id (wise)
+    # the connection references; the endpoint set is keyed by connector_id too, so a
+    # wrong ref still resolves the set and warns. If resolution regressed to dir-slug
+    # only, the set would read as 'unknown' and the warning would vanish.
+    doc = _build_bundle(tmp_path)
+    (tmp_path / "connectors/wise").rename(tmp_path / "connectors/wise-live")
+    _write(tmp_path, "connectors/wise-live/definition/endpoints/transfers.json",
+           {"endpoint_id": "transfers"})  # connector.json still declares connector_id "wise"
+    stream_path = tmp_path / "pipelines/p/streams/orders.json"
+    stream = json.loads(stream_path.read_text())
+    stream["source"]["endpoint_ref"]["endpoint_id"] = "nope"
+    stream_path.write_text(json.dumps(stream))
+    diag = V.diagnostics_for("pipeline", doc, bundle_root=tmp_path)
+    assert any(f["validator"] == "connector-endpoint-ref" for f in diag["findings"]), diag["findings"]
+
+
 def test_bundle_connector_endpoint_unknown_set_skips(tmp_path):
     # no downloaded endpoint set for the connector => 'unknown', not 'empty': the check
     # must skip rather than warn on a ref it cannot verify (false-positive guard)
