@@ -16,7 +16,7 @@ from pathlib import Path
 
 # Single source of the validator pin — bump this one string to move to a newer
 # published contract. Keep it in lockstep with requirements-dev.txt.
-VALIDATOR_PIN = "analitiq-validator==1.0.0rc3"
+VALIDATOR_PIN = "analitiq-validator==1.0.0rc4"
 
 _REEXEC_SENTINEL = "ANALITIQ_PIPELINE_VALIDATOR_BOOTSTRAPPED"
 

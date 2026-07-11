@@ -3,6 +3,11 @@
 ## [unreleased]
 
 ### Changed
+- Bumped the consumed contract to `analitiq-validator==1.0.0rc4`
+  (`analitiq-contract-models==1.0.0rc4` transitively). Draft pipeline bundles now
+  validate with `require_runnable=False`, so a not-yet-runnable draft produces no
+  finding (runnability is enforced only once the pipeline is `active`); documented
+  the `sidecar:` `secret_refs` scheme.
 - Replaced the bundled `scripts/validate_pipeline.py` with a thin adapter
   (`src/scripts/validate.py`) over the published, offline `analitiq-validator` +
   `analitiq-contract-models` packages; it self-installs the pinned version into a

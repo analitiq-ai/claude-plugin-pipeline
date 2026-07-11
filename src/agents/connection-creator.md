@@ -96,7 +96,8 @@ The orchestrator passes:
 - Never author the `discovered` map — the auto-discovery pipeline owns it and the
   connections API rejects a client-supplied value.
 - `secret_refs` pointer values must match an accepted scheme (`env:`, `file:`,
-  `ssm:/`, `s3://`, `arn:aws:secretsmanager:`, `arn:aws:ssm:`). Default to `env:`.
+  `sidecar:`, `ssm:/`, `s3://`, `arn:aws:secretsmanager:`, `arn:aws:ssm:`).
+  Default to `env:`.
 - Routing is by the contract's `storage`, not by `auth.type` — this holds for
   every connector and auth type, so it needs no change when a new connector
   ships. If the connector has no `connection_contract`, return a structured

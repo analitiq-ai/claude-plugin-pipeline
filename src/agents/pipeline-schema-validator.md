@@ -57,8 +57,9 @@ Analitiq services enforce) and normalizes every result into one envelope.
   fix-and-revalidate loop (≤ 5 passes per artifact, see
   `skills/pipeline-builder/references/pipeline.md`).
 - `passed` is `true` iff there is no `error`-severity finding; warnings are
-  allowed. (A draft pipeline is reported not-runnable as a `warning`, not an
-  error — the plugin authors drafts by design.)
+  allowed. (A draft pipeline's runnability is not checked — the plugin authors
+  drafts by design — so a draft produces no not-runnable finding; runnability is
+  enforced once the pipeline is `active`.)
 - If the command prints valid `Diagnostics` JSON on stdout, return it as-is even
   when it exits non-zero (`passed: false`). The orchestrator interprets the
   verdict.

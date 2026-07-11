@@ -118,8 +118,8 @@ the creator returns:
 ```
 
 Each finding is `{validator, severity, path, message}`. `severity ∈ {"error", "warning"}`;
-`passed` is `true` iff no `error` finding exists (warnings allowed — e.g. a draft
-pipeline reported not-runnable). Validator ids include `contract-model`
+`passed` is `true` iff no `error` finding exists (a `warning` does not fail
+validation). Validator ids include `contract-model`
 (single-document model validation), the `bundle-*` ids (cross-document referential
 checks, run with `--bundle-root`), and `endpoint-id-locator` (the derived
 database-endpoint id gate).

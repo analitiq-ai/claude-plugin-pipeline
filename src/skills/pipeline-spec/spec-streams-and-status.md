@@ -32,10 +32,13 @@ Rules:
 | `active` | Scheduled (subject to `schedule.type`). Requires non-empty `streams` AND at least one referenced stream with its own `status: "active"`. |
 | `inactive` | Paused. Not scheduled. `streams` may be empty. |
 
-`status: active` requires runnable streams. Run with `--bundle-root`, the bundle
-referential checks error when an `active` pipeline has no streams (or when no
-referenced stream is itself `active`). A **draft** pipeline is legitimately not
-runnable, so that verdict is surfaced as a *warning*, not an error.
+`status: active` requires runnable streams. An `active` pipeline with an empty
+`streams` list is rejected at the single-document contract-model level (no
+`--bundle-root` needed). The remaining rule — that at least one referenced stream
+is itself `active` — needs the bundle: run with `--bundle-root` and the referential
+checks error when no referenced stream is `active`. A **draft** pipeline is
+legitimately not yet runnable, so runnability is not checked for a draft
+(`require_runnable=False`); it is enforced only once the pipeline is `active`.
 
 ## Authoring sequence
 
