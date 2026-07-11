@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Repo Is
 
-This repository is the `analitiq-pipeline-builder` Claude Code plugin: a **local authoring tool for creating and running pipelines and streams** that move data between Analitiq DIP connectors. It authors **pipeline**, **stream**, **connection**, and **database-endpoint** JSON documents conforming to the published Analitiq schema contract at `schemas.analitiq.ai`, downloads pre-defined connectors from the DIP registry, and wires them into complete pipelines. It calls **no** registration APIs and it does **not** create connectors.
+This repository is the `analitiq-pipeline-builder` Claude Code plugin: a **local authoring tool for creating and editing pipelines and streams** that move data between Analitiq DIP connectors. It authors **pipeline**, **stream**, **connection**, and **database-endpoint** JSON documents conforming to the published Analitiq schema contract at `schemas.analitiq.ai`, downloads pre-defined connectors from the DIP registry, and wires them into complete pipelines. It calls **no** registration APIs and it does **not** create connectors.
 
 Connectors are the building blocks this plugin wires together — it never authors them:
 
@@ -17,7 +17,7 @@ This repository lives at <https://github.com/analitiq-ai/claude-plugin-pipeline>
 
 - **Contract-first.** Every authored document — pipeline, stream, connection, database-endpoint — is written against the published JSON Schemas at `schemas.analitiq.ai`. The schema is the spec. Never invent shapes the contract doesn't define; if the contract can't express something a pipeline needs, that's a contract gap to raise, not a freeform workaround.
 - **Declarative-first, author no code.** The plugin emits declarative JSON that the Analitiq engine runs. Connector behavior — including anything quirky about a source or destination system — belongs to the connector package in the DIP registry, never to a pipeline or stream.
-- **Secrets are referenced, never embedded.** Connection secrets are written as placeholders in the document's `values` envelope and templated into a gitignored `.secrets/credentials.json`; the user (or CI) resolves them before submission. The plugin never holds, logs, or ships a secret value. (See "Connection secrets workflow" under Key Concepts.)
+- **Secrets are referenced, never embedded.** Connection secrets are authored as `secret_refs` pointers (`env:…` by default) and templated into a gitignored `.secrets/credentials.json`; the user (or CI) resolves them before submission. The plugin never holds, logs, or ships a secret value. (See "Connection secrets workflow" under Key Concepts.)
 - **Deterministic, idempotent, no legacy.** Authored artifacts are reproducible and safe to re-run. No backward-compatibility or legacy shims unless explicitly instructed.
 - **Stay in your lane.** This plugin authors pipelines / streams / connections / endpoints only. Connector documents come from the registry; creating them belongs to the connector-creator plugin. Agents must never author JSON that belongs to another agent's responsibility.
 
@@ -25,14 +25,14 @@ This repository lives at <https://github.com/analitiq-ai/claude-plugin-pipeline>
 
 **Agent chain:** `pipeline-builder` (skill, orchestrator) → `pipeline-provider-researcher` → `registry-browser` → `connection-creator` → `private-endpoint-creator` (DB only) → `pipeline-creator` → `stream-creator` (one per endpoint, parallel) → `pipeline-schema-validator` (loop) → `pipeline-drift-classifier`
 
-- `pipeline-builder` (skill) — orchestrator. Collects intent, dispatches the creators, runs the validator loop, writes files only when every artifact passes. Loads the cross-cutting references it owns; dispatches the entity creators below.
+- `pipeline-builder` (skill) — orchestrator. Collects intent, dispatches the creators, runs the validator loop, writes files only when every artifact passes. In **edit** mode it changes an existing artifact in place (surgical, non-destructive) instead of building from scratch. Loads the cross-cutting references it owns; dispatches the entity creators below.
 - `pipeline-provider-researcher` — collects `PipelineFacts` (replication method, write mode, schedule, naming) from the user. No WebSearch.
 - `registry-browser` — downloads the source + destination connectors from the DIP registry (read-only; reuses connectors already on disk).
-- `connection-creator` — authors a `connection.json` per side (single `values` envelope) plus a sibling `.secrets/credentials.json` template the user fills in.
+- `connection-creator` — authors a `connection.json` per side (routing each contract input into `parameters` / `selections` / `secret_refs` by its `storage`) plus a sibling `.secrets/credentials.json` template the user fills in.
 - `private-endpoint-creator` — database connections only: introspects the live database to discover schemas/tables and authors `database-endpoint` documents per selected table.
 - `pipeline-creator` — authors the `pipeline.json` shell that references the connections by their `connection_id` UUIDs.
 - `stream-creator` — authors one `stream.json` per selected endpoint (source → destination + field mapping), dispatched in parallel.
-- `pipeline-schema-validator` — runs Layer 1 (Draft 2020-12 JSON Schema) and Layer 2 semantic validators. Backed by `scripts/validate_pipeline.py`.
+- `pipeline-schema-validator` — validates authored documents against the published contract by running the plugin's adapter (`scripts/validate.py`), which consumes the published `analitiq-validator` package. Returns a `Diagnostics` JSON object.
 - `pipeline-drift-classifier` — surfaces the structural diff against a previous release.
 
 Each entity creator owns its authoring vocabulary via a dedicated spec skill: `pipeline-spec`, `stream-spec`, `connection-spec`, `endpoint-spec`.
@@ -48,36 +48,30 @@ Each entity creator owns its authoring vocabulary via a dedicated spec skill: `p
 | API endpoint | `https://schemas.analitiq.ai/api-endpoint/latest.json` | not authored — comes from the connector document |
 | Connector | `https://schemas.analitiq.ai/connector/latest.json` | not authored — owned by `analitiq-connector-builder` (separate repo) |
 
-Authored documents declare `$schema` with the `schemas.analitiq.ai` host — the URL is locked by a `const` inside each schema, and the validator fetches from the same host.
+Authored documents declare `$schema` with the `schemas.analitiq.ai` host — the URL is locked by a `const` inside each schema. Validation itself is offline and model-driven (the `analitiq-validator` package), so no schema is fetched.
 
 ## Key Concepts
 
 - **Identity model — UUIDs inside, slugs on disk.** The plugin authors RFC-4122 **UUIDs** for `pipeline_id`, `stream_id`, and `connection_id` and threads them through every cross-document reference. `connector_id` and `endpoint_id` are **slugs** (the connector's registry slug; the endpoint's stable `^[a-z0-9][a-z0-9_-]*$` identifier). On-disk directory names are human-readable slugs, independent of the UUID identity stored inside each document. The plugin makes no API calls; the registry can also assign UUIDs on ingest if the plugin omits them.
-- **Connection secrets workflow.** Connection documents use a single flat `values` envelope. For inputs whose connector-contract bucket is `secrets`, the plugin writes a human-readable placeholder (`"<see .secrets/credentials.json>"`) into `values` and emits a `.secrets/credentials.json` template the user fills in. The user (or CI) merges secret values into the document's `values` block before submitting the connection to the registry. The registry never reads `.secrets/` directly. `.secrets/` is gitignored and never overwritten by the orchestrator.
+- **Connection secrets workflow.** A connection document has four maps — `parameters`, `selections`, `discovered`, `secret_refs` — and the plugin routes each connector-contract input/output into one by its `storage` (`connection.parameters` → `parameters`, `secrets` → `secret_refs`, `connection.selections` → `selections`; `discovered` is server-managed and never authored). For each secret, the plugin writes a pointer into `secret_refs` (`env:ANALITIQ_<slug>_<key>` by default; `file:`, `ssm:/`, `s3://`, and `arn:…` are also accepted) and emits a `.secrets/credentials.json` template keyed by the env-var names for the user to fill in. The plugin never writes a secret value into the document. `.secrets/` is gitignored and never overwritten by the orchestrator.
 - **Reuse of existing artifacts.** Adding a pipeline to systems already wired up is common: an on-disk `connectors/<slug>/definition/connector.json` is reused (no re-fetch); a `connections/<slug>/connection.json` whose `connector_id` matches the side is reused as-is (including its `.secrets/`); already-discovered endpoint files are reused (only newly selected tables run introspection). A `connector_id` mismatch halts and asks the user to choose another slug or remove the file themselves.
 - **Per-build vs shared state.** The only directory that blocks the orchestrator is `pipelines/<pipeline-slug>/` — if it exists, the user is asked to pick a different `pipeline_slug` or remove it themselves. The orchestrator never deletes files on the user's behalf and never overwrites a connection's `.secrets/`.
 
 ## Validation
 
-`scripts/validate_pipeline.py` runs Layer 1 (Draft 2020-12 JSON Schema, against the schema selected by `--entity {pipeline|stream|connection|database_endpoint}`) plus Layer 2 semantic validators:
+The plugin does not ship a validator — it consumes the published, offline `analitiq-validator` + `analitiq-contract-models` packages through a thin adapter, `scripts/validate.py`, which normalizes every result into one `Diagnostics` JSON object (`{passed, findings[]}`). Dispatch per entity:
 
-- `reserved-field` — no server-managed fields in authored docs.
-- `schedule-shape` — manual / interval / cron field exclusivity; IANA timezone parses.
-- `runtime-ranges` — engine vcpu/memory, runtime buffer/batching, error-handling retries.
-- `endpoint-ref-shape` — `scope ∈ {connector, connection}` (`connection` reserved for database endpoints); destination refs unique.
-- `mapping-shape` — exactly one of `expression` / `constant` per assignment; `expression.op == "get"` (v1); unique target paths; validation rules reference mapped fields.
-- `filter-operators` — database vs API operator vocabularies; unary operators omit `value`.
-- `column-uniqueness` — column-name and `ordinal_position` uniqueness; primary-key resolution against declared columns.
-- `pipeline-stream-consistency` (with `--bundle-root`) — every referenced stream's `pipeline_id` matches the parent pipeline; endpoint-ref connection IDs are members of `pipeline.connections`.
-- `status-lifecycle` — `status=active` requires runnable streams.
+- `database_endpoint` → `analitiq.validator.validate_document` (contract model + the derived-`endpoint_id` gate + column checks).
+- `connection` / `stream` / `pipeline` → the matching `*Input` Pydantic model (`ConnectionInput` / `StreamInput` / `PipelineInput`) — the source of truth the published JSON Schemas render from.
+- `pipeline` with `--bundle-root` → additionally `analitiq.validator.validate_pipeline_bundle` for cross-document referential integrity (stream↔pipeline parentage, connection role wiring, endpoint-ref resolution). A draft pipeline's not-runnable status is surfaced as a warning, not an error.
 
-Run directly:
+The adapter self-installs the pinned validator (`analitiq-validator==1.0.0rc3`, see `requirements-dev.txt` / `scripts/_analitiq.py`) into a managed virtualenv on first use and is offline thereafter. `scripts/endpoint_id.py` reuses the same package to compute the derived database-endpoint identity. Run directly:
 
 ```bash
-python scripts/validate_pipeline.py --entity pipeline --document path/to/pipeline.json --bundle-root path/to/project
+python3 scripts/validate.py --entity pipeline --document path/to/pipeline.json --bundle-root path/to/project
 ```
 
-Output is a single `Diagnostics` JSON object. Exit `0` iff `passed: true`. Tests live under `tests/pipeline_validator/`; run with `pytest`.
+Output is a single `Diagnostics` JSON object. Exit `0` iff `passed: true`. Tests live under `tests/`; run with `pip install -r requirements-dev.txt && pytest`.
 
 ## File Output
 
@@ -89,7 +83,7 @@ connections/
 └── <connection-slug>/
     ├── connection.json             # validates against connection/latest.json
     ├── .secrets/credentials.json   # template the user fills in (gitignored)
-    └── endpoints/<endpoint-slug>.json   # database connections only
+    └── endpoints/<endpoint_id>.json     # database connections only; <endpoint_id> is the derived handle
 
 pipelines/
 └── <pipeline-slug>/

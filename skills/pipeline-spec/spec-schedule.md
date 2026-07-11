@@ -35,8 +35,7 @@ the plugin's.
 ## `timezone`
 
 A valid IANA timezone name (e.g., `UTC`, `Europe/Berlin`, `America/New_York`).
-The validator parses this with `zoneinfo.ZoneInfo` — anything Python's
-tzdata rejects, the plugin rejects.
+Use a name in the tz database; an invalid name is rejected at validation.
 
 ## Status interaction
 

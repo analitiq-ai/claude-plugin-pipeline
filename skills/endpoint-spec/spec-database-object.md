@@ -23,6 +23,15 @@ The hashing layer (`schema_hash`, server-managed) relies on this
 verbatim preservation. Normalizing breaks the hash and triggers false
 drift.
 
+## Derived `endpoint_id`
+
+`database_object` and the endpoint's `endpoint_id` are two views of one identity:
+`endpoint_id` is derived from `(catalog, schema, name)` as
+`slug(schema)__slug(name)[__slug(catalog)]__hash8`, the hash taken over the
+**verbatim** identifiers. Compute both together with `scripts/endpoint_id.py`
+(see `private-endpoint-creator`) so they always agree and match what the
+validator recomputes.
+
 ## `name`
 
 Required. Provider-native object identifier. `minLength: 1`. No quoting
@@ -62,8 +71,7 @@ it for behavioral hints (e.g., "don't write to a view").
 
 ## Uniqueness
 
-The tuple `(catalog, schema, name)` must be unique within the owner
-(the connection that owns this endpoint). The `column-uniqueness`
-validator catches column / primary-key issues at the document level.
-Cross-file uniqueness of `database_object` tuples is enforced
-server-side at catalog-merge time.
+The tuple `(catalog, schema, name)` must be unique within the owner (the
+connection that owns this endpoint). Column-name and primary-key issues are
+caught by the contract model at the document level; cross-file uniqueness of
+`database_object` tuples is enforced server-side at catalog-merge time.

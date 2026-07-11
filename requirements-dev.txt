@@ -1,0 +1,4 @@
+# Published Analitiq packages the validator adapter (scripts/validate.py) consumes.
+# Exact pre-release pin — keep in lockstep with VALIDATOR_PIN in scripts/_analitiq.py.
+# Installs analitiq-contract-models transitively.
+analitiq-validator==1.0.0rc3

@@ -18,11 +18,11 @@ Rules:
 
 - UUIDs are unique within the array (`uniqueItems: true` in the schema).
 - Each referenced stream's `pipeline_id` must equal this pipeline's
-  `pipeline_id`. The `pipeline-stream-consistency` Layer 2 validator
-  enforces this when `--bundle-root` is supplied.
+  `pipeline_id`. The bundle referential checks enforce this when
+  `--bundle-root` is supplied.
 - An empty `streams` array is permitted in `draft` or `inactive`
-  status. Only `status: active` requires non-empty `streams` (see
-  `status-lifecycle` validator below).
+  status. Only `status: active` requires non-empty `streams` (see the
+  status rules below).
 
 ## `status`
 
@@ -32,10 +32,10 @@ Rules:
 | `active` | Scheduled (subject to `schedule.type`). Requires non-empty `streams` AND at least one referenced stream with its own `status: "active"`. |
 | `inactive` | Paused. Not scheduled. `streams` may be empty. |
 
-`status: active` requires runnable streams. The `status-lifecycle`
-Layer 2 validator emits an error when an `active` pipeline has no
-streams, and a warning when called without `--bundle-root` (because it
-can't read stream files to verify per-stream status).
+`status: active` requires runnable streams. Run with `--bundle-root`, the bundle
+referential checks error when an `active` pipeline has no streams (or when no
+referenced stream is itself `active`). A **draft** pipeline is legitimately not
+runnable, so that verdict is surfaced as a *warning*, not an error.
 
 ## Authoring sequence
 

@@ -158,7 +158,7 @@ Omit for schemaless engines (MongoDB).
 
 ## Uniqueness
 
-Per the `column-uniqueness` Layer 2 validator:
+The contract model enforces:
 
 - `name` values are unique within the array.
 - `ordinal_position` values are unique within the array (when present).

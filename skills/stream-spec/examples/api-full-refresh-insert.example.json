@@ -10,19 +10,34 @@
       "endpoint_id": "transfers"
     },
     "filters": [
-      {"field": "status", "operator": "eq", "value": "completed"}
+      {
+        "field": "status",
+        "operator": "eq",
+        "value": "completed"
+      }
     ],
-    "replication": {"method": "full_refresh"},
-    "primary_keys": ["id"]
+    "replication": {
+      "method": "full_refresh"
+    },
+    "primary_keys": [
+      "id"
+    ]
   },
   "destinations": [
     {
       "endpoint_ref": {
         "scope": "connection",
         "connection_id": "05050505-0505-4505-8505-050505050505",
-        "endpoint_id": "public_transfers"
+        "endpoint_id": "public__transfers__9a455244",
+        "database_object": {
+          "name": "transfers",
+          "object_type": "table",
+          "schema": "public"
+        }
       },
-      "write": {"mode": "insert"}
+      "write": {
+        "mode": "insert"
+      }
     }
   ],
   "status": "draft"

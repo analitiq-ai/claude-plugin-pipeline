@@ -1,56 +1,61 @@
 # `endpoint_ref` shape
 
-Source and every destination carry an `endpoint_ref`:
+The `source` and every `destinations[]` entry carry an `endpoint_ref`. It is a
+**discriminated union on `scope`** — the two scopes have different shapes:
+
+## `scope: "connector"` — public connector endpoint (API)
 
 ```jsonc
 {
-  "scope": "connector" | "connection",   // closed enum
+  "scope": "connector",
   "connection_id": "<connection-uuid>",
-  "endpoint_id": "<endpoint slug>"
+  "endpoint_id": "<connector endpoint key>"
 }
 ```
 
-## `scope`
+Refers to a public endpoint baked into the connector document (typically API
+endpoints), pinned by the connection's `connector_version` at runtime. All three
+fields are required. `endpoint_id` matches a key under the connector's
+`definition/endpoints/*.json`.
 
-| Value | Meaning |
-|---|---|
-| `connector` | Refers to a **public** endpoint baked into the connector document (typically API endpoints). Pinned by the connection's `connector_version` at runtime. |
-| `connection` | Refers to a **private** connection-scoped endpoint (database snapshots produced by introspection). |
+## `scope: "connection"` — private database endpoint
 
-Under v1, `scope: connection` is only valid for **database** endpoints.
-Connection-scoped API endpoints await an API endpoint snapshot-hashing
-spec. The `endpoint-ref-shape` Layer 2 validator emits an error for any
-other `scope` value; runtime additionally rejects `scope: connection`
-on API endpoints.
+```jsonc
+{
+  "scope": "connection",
+  "connection_id": "<connection-uuid>",
+  "endpoint_id": "<derived endpoint handle>",
+  "database_object": { "schema": "public", "name": "orders" }
+}
+```
+
+Refers to a private, connection-scoped database endpoint produced by
+introspection. **`database_object` is required** and carries the verbatim
+database-object identity — the same `{catalog?, schema?, name}` recorded on the
+endpoint document (author it from the endpoint doc's `database_object`, i.e. the
+`build_database_object(...)` output, so the two always agree). `endpoint_id` is
+optional in the schema, but **author it** (the derived
+`slug(schema)__slug(table)[__slug(catalog)]__<hash8>` handle) so the
+cross-document bundle check can resolve the reference.
+
+`scope: "connection"` is valid only for **database** endpoints. Connection-scoped
+API endpoints await an API-endpoint snapshot-hashing spec; `stream-creator`
+refuses that combination.
 
 ## `connection_id`
 
-The **`connection_id` UUID** of the connection the parent pipeline
-selected for that side — source for `stream.source.endpoint_ref`,
-destinations for `stream.destinations[].endpoint_ref`. The value must
-match one of `pipeline.connections.source` or
-`pipeline.connections.destinations[]`.
-
-## `endpoint_id`
-
-The stable endpoint identifier chosen from endpoint discovery. For API
-endpoints, this matches a key from the connector's
-`definition/endpoints/*.json`. For database endpoints, this matches the
-`endpoint_id` on the introspection-authored endpoint document
-(`^[a-z0-9][a-z0-9_-]*$`).
+The **`connection_id` UUID** of the connection the parent pipeline selected for
+that side — `pipeline.connections.source` for the stream source, and one of
+`pipeline.connections.destinations[]` for each destination.
 
 ## Uniqueness
 
-Destination `endpoint_ref` tuples `(scope, connection_id, endpoint_id)`
-must be unique within a single stream. The `endpoint-ref-shape` validator
-catches duplicates.
+Destination `endpoint_ref`s must be unique within a single stream.
 
 ## Cross-document consistency
 
-The `pipeline-stream-consistency` validator (run with `--bundle-root`)
-asserts that:
-
-- Every source `endpoint_ref.connection_id` equals
-  `pipeline.connections.source`.
-- Every destination `endpoint_ref.connection_id` is in
-  `pipeline.connections.destinations`.
+Validated with `--bundle-root` (the `bundle-*` checks): every source
+`endpoint_ref.connection_id` equals `pipeline.connections.source`; every
+destination `endpoint_ref.connection_id` is one of
+`pipeline.connections.destinations`; and every `scope: "connection"` ref resolves
+to a bundled database-endpoint document by `(connection_id, endpoint_id)`.

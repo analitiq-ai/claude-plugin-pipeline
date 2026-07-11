@@ -38,20 +38,21 @@ plugin must not author those fields.**
 
 ## `assignments[].value`
 
-Exactly one of:
+Exactly one of `expression` or `constant` (the contract model rejects both or
+neither):
 
-- `expression` — a v1 `get` op: `{"op": "get", "path": "<source field>"}`.
-  No other ops are supported yet. Future ops are reserved but not
-  defined.
+- `expression` — one of:
+  - `{"op": "get", "path": "<source field>"}` — read a source field. The default;
+    it covers almost every mapping.
+  - `{"op": "pipe", "args": [{"op": "get", "path": "<source field>"}, {"op": "fn", "name": "<conversion>"}, …]}` —
+    a `get` seed passed through one or more `fn` conversion stages. An `fn` node is
+    valid **only** inside `pipe.args`, never standalone. Author `pipe` only when a
+    conversion is genuinely required; otherwise prefer `get`.
 - `constant` — `{"arrow_type": "<fully-qualified Arrow type>", "value": <JSON value>}`.
-
-The `mapping-shape` Layer 2 validator emits an error when both or
-neither is present, and when `expression.op != "get"`.
 
 ## `assignments[].target.path`
 
-Must be unique within `assignments`. The `mapping-shape` validator
-catches duplicates.
+Must be unique within `assignments`; the contract model rejects duplicates.
 
 Cross-document: each `target.path` must exist in the resolved
 destination endpoint schema. Endpoint resolution is server-side at

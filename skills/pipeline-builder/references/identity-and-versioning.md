@@ -52,10 +52,9 @@ connections/<connection-slug>/endpoints/<endpoint-slug>.json
 ```
 
 The slug is **only** used for file organization. Cross-document refs
-inside the JSON use the UUID identities, not the slugs. The
-`pipeline-stream-consistency` validator finds stream files by walking
-`pipelines/<slug>/streams/` and then compares the UUIDs inside the
-documents.
+inside the JSON use the UUID identities, not the slugs. The bundle
+referential checks (run with `--bundle-root`) find stream files by walking
+`pipelines/<slug>/streams/` and then compare the UUIDs inside the documents.
 
 ## Server-managed `version` field
 
