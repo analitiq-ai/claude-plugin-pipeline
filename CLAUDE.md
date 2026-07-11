@@ -32,7 +32,7 @@ This repository lives at <https://github.com/analitiq-ai/claude-plugin-pipeline>
 - `private-endpoint-creator` — database connections only: introspects the live database to discover schemas/tables and authors `database-endpoint` documents per selected table.
 - `pipeline-creator` — authors the `pipeline.json` shell that references the connections by their `connection_id` UUIDs.
 - `stream-creator` — authors one `stream.json` per selected endpoint (source → destination + field mapping), dispatched in parallel.
-- `pipeline-schema-validator` — validates authored documents against the published contract by running the plugin's adapter (`scripts/validate.py`), which consumes the published `analitiq-validator` package. Returns a `Diagnostics` JSON object.
+- `pipeline-schema-validator` — validates authored documents against the published contract by running the plugin's adapter (`src/scripts/validate.py`), which consumes the published `analitiq-validator` package. Returns a `Diagnostics` JSON object.
 - `pipeline-drift-classifier` — surfaces the structural diff against a previous release.
 
 Each entity creator owns its authoring vocabulary via a dedicated spec skill: `pipeline-spec`, `stream-spec`, `connection-spec`, `endpoint-spec`.
@@ -59,16 +59,16 @@ Authored documents declare `$schema` with the `schemas.analitiq.ai` host — the
 
 ## Validation
 
-The plugin does not ship a validator — it consumes the published, offline `analitiq-validator` + `analitiq-contract-models` packages through a thin adapter, `scripts/validate.py`, which normalizes every result into one `Diagnostics` JSON object (`{passed, findings[]}`). Dispatch per entity:
+The plugin does not ship a validator — it consumes the published, offline `analitiq-validator` + `analitiq-contract-models` packages through a thin adapter, `src/scripts/validate.py`, which normalizes every result into one `Diagnostics` JSON object (`{passed, findings[]}`). Dispatch per entity:
 
 - `database_endpoint` → `analitiq.validator.validate_document` (contract model + the derived-`endpoint_id` gate + column checks).
 - `connection` / `stream` / `pipeline` → the matching `*Input` Pydantic model (`ConnectionInput` / `StreamInput` / `PipelineInput`) — the source of truth the published JSON Schemas render from.
 - `pipeline` with `--bundle-root` → additionally `analitiq.validator.validate_pipeline_bundle` for cross-document referential integrity (stream↔pipeline parentage, connection role wiring, endpoint-ref resolution). A draft pipeline's not-runnable status is surfaced as a warning, not an error.
 
-The adapter self-installs the pinned validator (`analitiq-validator==1.0.0rc3`, see `requirements-dev.txt` / `scripts/_analitiq.py`) into a managed virtualenv on first use and is offline thereafter. `scripts/endpoint_id.py` reuses the same package to compute the derived database-endpoint identity. Run directly:
+The adapter self-installs the pinned validator (`analitiq-validator==1.0.0rc3`, see `requirements-dev.txt` / `src/scripts/_analitiq.py`) into a managed virtualenv on first use and is offline thereafter. `src/scripts/endpoint_id.py` reuses the same package to compute the derived database-endpoint identity. Run directly:
 
 ```bash
-python3 scripts/validate.py --entity pipeline --document path/to/pipeline.json --bundle-root path/to/project
+python3 src/scripts/validate.py --entity pipeline --document path/to/pipeline.json --bundle-root path/to/project
 ```
 
 Output is a single `Diagnostics` JSON object. Exit `0` iff `passed: true`. Tests live under `tests/`; run with `pip install -r requirements-dev.txt && pytest`.

@@ -4,15 +4,17 @@
 
 ### Changed
 - Replaced the bundled `scripts/validate_pipeline.py` with a thin adapter
-  (`scripts/validate.py`) over the published, offline `analitiq-validator` +
+  (`src/scripts/validate.py`) over the published, offline `analitiq-validator` +
   `analitiq-contract-models` packages; it self-installs the pinned version into a
-  managed virtualenv on first use. Added `scripts/endpoint_id.py` for the derived
-  database-endpoint identity.
+  managed virtualenv on first use. Added `src/scripts/endpoint_id.py` for the
+  derived database-endpoint identity.
 - Aligned all authoring to the current published contracts: connection
   `parameters`/`selections`/`secret_refs` (secrets as `env:` pointers, no
   `values` envelope); stream discriminated `endpoint_ref` carrying
   `database_object`, flat `conflict_keys`, and the `get`/`pipe`/`fn` expression
   grammar; database-endpoint derived `endpoint_id`.
+- Moved the plugin package (`.claude-plugin/`, `agents/`, `skills/`, `scripts/`)
+  under `src/`, separating it from repo-management files.
 
 ### Added
 - Edit mode in the `pipeline-builder` orchestrator — surgical, in-place changes

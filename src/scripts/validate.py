@@ -24,7 +24,7 @@ right one:
 
 Validation is offline — no schema is fetched. Usage::
 
-    python3 scripts/validate.py --entity pipeline --document path/to/pipeline.json --bundle-root .
+    python3 src/scripts/validate.py --entity pipeline --document path/to/pipeline.json --bundle-root .
 
 Exit status is ``0`` iff ``passed`` (no error-severity finding), ``1`` on any
 error finding or an unreadable document, ``2`` on a CLI usage error.

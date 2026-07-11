@@ -16,7 +16,7 @@ and submit.
 ## Install
 
 ```bash
-claude plugin add ./claude-plugin-pipeline
+claude plugin add ./claude-plugin-pipeline/src
 ```
 
 ## Use
@@ -52,7 +52,7 @@ Validation runs the published, offline `analitiq-validator` package through a
 thin adapter (the plugin self-installs it on first use):
 
 ```bash
-python3 scripts/validate.py \
+python3 src/scripts/validate.py \
   --entity pipeline \
   --document path/to/pipeline.json \
   --bundle-root path/to/project

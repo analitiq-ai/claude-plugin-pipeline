@@ -1,4 +1,4 @@
-"""Tests for the validator adapter (scripts/validate.py).
+"""Tests for the validator adapter (src/scripts/validate.py).
 
 The adapter holds no validation logic — it dispatches to the published
 `analitiq-validator` / `analitiq-contract-models` packages. These tests therefore
@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
+sys.path.insert(0, str(ROOT / "src" / "scripts"))
 import validate as V  # noqa: E402
 
 pytest.importorskip("analitiq.validator",
