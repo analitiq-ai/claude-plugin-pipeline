@@ -22,6 +22,12 @@
   under `src/`, separating it from repo-management files.
 
 ### Added
+- Bundle validation now flags an `endpoint-filename` error when a connection-scoped
+  private endpoint file is not named `<endpoint_id>.json` — the engine locates
+  endpoints by filename stem, so a mis-named file (correct id inside, wrong name)
+  passes referential checks but fails at runtime. Edit mode also validates a
+  changed pipeline/stream's referenced closure (its connections and their private
+  endpoints), so a stale or mis-named referenced artifact surfaces at edit time.
 - Edit mode in the `pipeline-builder` orchestrator — surgical, in-place changes
   to an existing pipeline / stream / connection / database-endpoint.
 

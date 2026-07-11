@@ -154,6 +154,20 @@ def test_bundle_referential_error(tmp_path):
     assert any(f["validator"] == "bundle-connection-ref" for f in diag["findings"]), diag["findings"]
 
 
+def test_bundle_endpoint_filename_mismatch(tmp_path):
+    # the engine locates a connection-scoped endpoint by filename stem; a file named
+    # something other than <endpoint_id>.json registers under the wrong id at runtime.
+    # The id inside the file is still correct (so the referential checks pass), but the
+    # bundle assembler flags the filename mismatch as an error.
+    doc = _build_bundle(tmp_path)
+    ep_dir = tmp_path / "connections/postgresql/definition/endpoints"
+    (ep_dir / f"{EID}.json").rename(ep_dir / "orders.json")
+    diag = V.diagnostics_for("pipeline", doc, bundle_root=tmp_path)
+    assert not diag["passed"]
+    assert any(f["validator"] == "endpoint-filename" and f["severity"] == "error"
+               for f in diag["findings"]), diag["findings"]
+
+
 def test_unreadable_document(tmp_path):
     diag = V.diagnostics_for("pipeline", tmp_path / "does_not_exist.json")
     assert not diag["passed"]

@@ -106,6 +106,29 @@ def _read_bundle_member(path: Path, findings: list[dict]) -> dict | None:
     return doc
 
 
+def _endpoint_filename_findings(path: Path, endpoint: dict) -> list[dict]:
+    """The engine locates a connection-scoped endpoint by its filename stem
+    (`definition/endpoints/<endpoint_id>.json`), so a file whose name differs from
+    its own `endpoint_id` registers under the wrong id and its stream endpoint-refs
+    will not resolve at runtime — even though the id inside the file is correct and
+    the referential checks (which resolve by that internal id) pass. Flag the
+    mismatch here, where the file sits at its materialized bundle location. Mirrors
+    the published validator's `endpoint-filename` gate, which the shared validator
+    applies to API endpoints but not yet to the database endpoints this plugin
+    authors."""
+    endpoint_id = endpoint.get("endpoint_id")
+    if not isinstance(endpoint_id, str) or not endpoint_id:
+        return []  # a missing/invalid id is the contract model's job, not this check's
+    expected = f"{endpoint_id}.json"
+    if path.name != expected:
+        return [_finding(
+            "endpoint-filename", "error", "/endpoint_id",
+            f"endpoint file is named {path.name!r} but endpoint_id is {endpoint_id!r}; "
+            f"it must be named {expected!r} (the engine locates connection-scoped "
+            "endpoints by filename stem: definition/endpoints/<endpoint_id>.json).")]
+    return []
+
+
 def _assemble_bundle(pipeline_doc: dict, document_path: Path, root: Path) -> tuple[dict, list[dict]]:
     """Gather the on-disk pipeline bundle the way the engine resolves it at load:
     the pipeline plus its sibling stream documents, every connection, the
@@ -133,6 +156,7 @@ def _assemble_bundle(pipeline_doc: dict, document_path: Path, root: Path) -> tup
             endpoint = _read_bundle_member(ep_json, findings)
             if endpoint is None:
                 continue
+            findings.extend(_endpoint_filename_findings(ep_json, endpoint))
             # Endpoint documents omit connection_id (server-managed); supply the
             # owning connection's id so the bundle's endpoint-ref check can resolve
             # connection-scoped references.
