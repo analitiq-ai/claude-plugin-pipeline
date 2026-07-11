@@ -118,7 +118,7 @@ def _build_bundle(root: Path) -> Path:
     _write(root, "connectors/postgresql/definition/connector.json", {"connector_id": "postgresql", "kind": "database"})
     _write(root, "connections/wise/connection.json", CONN_WISE)
     _write(root, "connections/postgresql/connection.json", CONN_PG)
-    _write(root, f"connections/postgresql/endpoints/{EID}.json", DB_ENDPOINT)
+    _write(root, f"connections/postgresql/definition/endpoints/{EID}.json", DB_ENDPOINT)
     _write(root, "pipelines/p/streams/orders.json", STREAM)
     return _write(root, "pipelines/p/pipeline.json", PIPELINE)
 

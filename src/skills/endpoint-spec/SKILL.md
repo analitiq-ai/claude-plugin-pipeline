@@ -26,7 +26,7 @@ API endpoints come from the connector document, not from here. This
 skill is **database-only**. API endpoints in stream `endpoint_ref`s use
 `scope: connector` and point at the connector's `definition/endpoints/`.
 Database endpoints use `scope: connection` and live under
-`connections/<connection-slug>/endpoints/`.
+`connections/<connection-slug>/definition/endpoints/`.
 
 ## What this skill covers
 

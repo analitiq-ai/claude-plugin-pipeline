@@ -184,7 +184,7 @@ Do NOT load `pipeline-spec`, `stream-spec`, `connection-spec`, or
    are sequential per connection but parallel across connections.
 
    For each table the user selects, check whether an endpoint file for
-   it already exists under `connections/<connection-slug>/endpoints/`.
+   it already exists under `connections/<connection-slug>/definition/endpoints/`.
    The filename is the endpoint's **derived** `endpoint_id`
    (`slug(schema)__slug(name)[__slug(catalog)]__hash8`); compute it for
    the table with `scripts/endpoint_id.py` to know the filename:
