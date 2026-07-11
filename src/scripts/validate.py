@@ -126,7 +126,7 @@ def _assemble_bundle(pipeline_doc: dict, document_path: Path, root: Path) -> tup
             continue
         connections.append(conn)
         connection_id = conn.get("connection_id")
-        for ep_json in sorted((conn_json.parent / "endpoints").glob("*.json")):
+        for ep_json in sorted((conn_json.parent / "definition" / "endpoints").glob("*.json")):
             endpoint = _read_bundle_member(ep_json, findings)
             if endpoint is None:
                 continue

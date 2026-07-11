@@ -48,7 +48,7 @@ Directories use human-readable slugs:
 pipelines/<pipeline-slug>/pipeline.json
 pipelines/<pipeline-slug>/streams/<stream-slug>.json
 connections/<connection-slug>/connection.json
-connections/<connection-slug>/endpoints/<endpoint-slug>.json
+connections/<connection-slug>/definition/endpoints/<endpoint-slug>.json
 ```
 
 The slug is **only** used for file organization. Cross-document refs

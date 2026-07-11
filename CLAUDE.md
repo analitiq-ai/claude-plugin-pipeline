@@ -77,13 +77,13 @@ Output is a single `Diagnostics` JSON object. Exit `0` iff `passed: true`. Tests
 
 ```
 connectors/                         # downloaded by registry-browser, read-only
-└── <slug>/definition/connector.json (+ endpoints/ for API connectors)
+└── <slug>/definition/connector.json (+ definition/endpoints/ for API connectors)
 
 connections/
 └── <connection-slug>/
     ├── connection.json             # validates against connection/latest.json
     ├── .secrets/credentials.json   # template the user fills in (gitignored)
-    └── endpoints/<endpoint_id>.json     # database connections only; <endpoint_id> is the derived handle
+    └── definition/endpoints/<endpoint_id>.json   # database connections only; <endpoint_id> is the derived handle
 
 pipelines/
 └── <pipeline-slug>/

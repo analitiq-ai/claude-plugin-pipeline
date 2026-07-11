@@ -122,7 +122,7 @@ The agent has three modes; one invocation runs exactly one mode.
    ```
 
    `directory_slug` equals the endpoint's derived `endpoint_id` and becomes the
-   filename stem (`connections/<connection-slug>/endpoints/<endpoint_id>.json`).
+   filename stem (`connections/<connection-slug>/definition/endpoints/<endpoint_id>.json`).
 
 ## Required reading
 
