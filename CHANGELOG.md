@@ -3,13 +3,13 @@
 ## [unreleased]
 
 ### Changed
-- Bumped the consumed contract to `analitiq-validator==1.0.0rc5`
-  (`analitiq-contract-models==1.0.0rc5` transitively). Draft pipeline bundles now
+- Bumped the consumed contract to `analitiq-validator==1.0.0rc6`
+  (`analitiq-contract-models==1.0.0rc6` transitively). Draft pipeline bundles now
   validate with `require_runnable=False`, so a not-yet-runnable draft produces no
   finding (runnability is enforced only once the pipeline is `active`); documented
-  the `sidecar:` `secret_refs` scheme. rc5 adds the `endpoint-filename` gate for
-  stem-addressed database endpoints in `validate_document`; the bundle path is
-  covered plugin-side (below).
+  the `sidecar:` `secret_refs` scheme. rc5 added the `endpoint-filename` gate for
+  stem-addressed database endpoints in `validate_document`; rc6 exports
+  `endpoint_filename_findings` publicly, which the bundle path now reuses (below).
 - Replaced the bundled `scripts/validate_pipeline.py` with a thin adapter
   (`src/scripts/validate.py`) over the published, offline `analitiq-validator` +
   `analitiq-contract-models` packages; it self-installs the pinned version into a
@@ -24,14 +24,14 @@
   under `src/`, separating it from repo-management files.
 
 ### Added
-- Bundle validation now flags an `endpoint-filename` error when a connection-scoped
+- Bundle validation now flags an `endpoint-filename` finding when a connection-scoped
   private endpoint file is not named `<endpoint_id>.json` — the engine locates
   endpoints by filename stem, so a mis-named file (correct id inside, wrong name)
-  passes referential checks but fails at runtime. This covers the bundle path,
-  which the shared validator's filename gate cannot reach (it runs on a
-  filename-less bundle dict). Edit mode also validates a changed pipeline/stream's
-  referenced closure (its connections and their private endpoints), so a stale or
-  mis-named referenced artifact surfaces at edit time.
+  passes referential checks but fails at runtime. It calls the published
+  `endpoint_filename_findings` helper (the bundle validator runs on a filename-less
+  dict and can't reach the gate itself). Edit mode also validates a changed
+  pipeline/stream's referenced closure (its connections and their private
+  endpoints), so a stale or mis-named referenced artifact surfaces at edit time.
 - Edit mode in the `pipeline-builder` orchestrator — surgical, in-place changes
   to an existing pipeline / stream / connection / database-endpoint.
 

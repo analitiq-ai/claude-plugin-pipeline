@@ -106,30 +106,6 @@ def _read_bundle_member(path: Path, findings: list[dict]) -> dict | None:
     return doc
 
 
-def _endpoint_filename_findings(path: Path, endpoint: dict) -> list[dict]:
-    """The engine locates a connection-scoped endpoint by its filename stem
-    (`definition/endpoints/<endpoint_id>.json`), so a file whose name differs from
-    its own `endpoint_id` registers under the wrong id and its stream endpoint-refs
-    will not resolve at runtime — even though the id inside the file is correct and
-    the referential checks (which resolve by that internal id) pass. The published
-    validator's `validate_document` applies this `endpoint-filename` gate to a
-    stem-addressed database endpoint (one under `definition/endpoints/`), but
-    `validate_pipeline_bundle` runs on an in-memory bundle dict that carries no
-    filenames, so the bundle path cannot reach it — this guard enforces the same
-    invariant during bundle assembly, where the filenames are known."""
-    endpoint_id = endpoint.get("endpoint_id")
-    if not isinstance(endpoint_id, str) or not endpoint_id:
-        return []  # a missing/invalid id is the contract model's job, not this check's
-    expected = f"{endpoint_id}.json"
-    if path.name != expected:
-        return [_finding(
-            "endpoint-filename", "error", "/endpoint_id",
-            f"endpoint file is named {path.name!r} but endpoint_id is {endpoint_id!r}; "
-            f"it must be named {expected!r} (the engine locates connection-scoped "
-            "endpoints by filename stem: definition/endpoints/<endpoint_id>.json).")]
-    return []
-
-
 def _assemble_bundle(pipeline_doc: dict, document_path: Path, root: Path) -> tuple[dict, list[dict]]:
     """Gather the on-disk pipeline bundle the way the engine resolves it at load:
     the pipeline plus its sibling stream documents, every connection, the
@@ -137,6 +113,12 @@ def _assemble_bundle(pipeline_doc: dict, document_path: Path, root: Path) -> tup
     id, which endpoint documents do not carry themselves), and the downloaded
     connector identities. Returns the bundle plus any read-error findings for
     malformed siblings."""
+    # The engine locates a connection-scoped endpoint by its filename stem, so a file
+    # named other than <endpoint_id>.json won't resolve at runtime. validate_document
+    # gates this for a stem-addressed file, but validate_pipeline_bundle takes a
+    # filename-less dict — so run the published gate here, where the names are known.
+    from analitiq.validator import endpoint_filename_findings
+
     findings: list[dict] = []
 
     streams: list[dict] = []
@@ -157,7 +139,9 @@ def _assemble_bundle(pipeline_doc: dict, document_path: Path, root: Path) -> tup
             endpoint = _read_bundle_member(ep_json, findings)
             if endpoint is None:
                 continue
-            findings.extend(_endpoint_filename_findings(ep_json, endpoint))
+            # files here are stem-addressed by construction (globbed from
+            # definition/endpoints/), so the published filename gate applies directly
+            findings.extend(endpoint_filename_findings(endpoint, ep_json.name))
             # Endpoint documents omit connection_id (server-managed); supply the
             # owning connection's id so the bundle's endpoint-ref check can resolve
             # connection-scoped references.
