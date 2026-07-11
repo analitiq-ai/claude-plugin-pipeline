@@ -24,31 +24,63 @@ and you do not author anything.
    to do. The orchestrator is responsible for routing around existing
    connector directories — under normal flow it does not invoke you
    when a valid connector is already on disk.
-2. **Download the connector as a unit.** The registry hosts each
-   connector as its own repository under the `analitiq-dip-registry`
-   GitHub org, named after the connector slug (its `connector_id`). A
-   connector's endpoints (and its type-maps / manifest) are published
-   **alongside** `connector.json` under `definition/`, so download that
-   directory **wholesale** — do not enumerate endpoints from a manifest
-   and do not walk the repo file-by-file. Fetch the repo's `main` archive
-   with `GH_TOKEN` and extract only its `definition/` tree into
-   `target_dir`:
+2. **Download the connector as a unit, and verify it before trusting it.**
+   The registry hosts each connector as its own repository under the
+   `analitiq-dip-registry` GitHub org, named after the connector slug (its
+   `connector_id`). A connector's endpoints (and its type-maps / manifest)
+   are published **alongside** `connector.json` under `definition/`, so
+   download that directory **wholesale** — do not enumerate endpoints from
+   a manifest and do not walk the repo file-by-file. Fetch the repo's
+   `main` archive with `GH_TOKEN`, extract it in a scratch dir, and commit
+   it to `target_dir` **only after** confirming a `definition/connector.json`
+   actually landed:
 
    ```bash
-   slug="<connector_slug>"; dst="connectors/$slug"
-   mkdir -p "$dst"
-   gh api "repos/analitiq-dip-registry/$slug/tarball/main" > "/tmp/$slug.tgz"
-   top=$(tar tzf "/tmp/$slug.tgz" | head -1 | cut -d/ -f1)   # <org>-<repo>-<sha>/
-   tar xzf "/tmp/$slug.tgz" --strip-components=1 -C "$dst" "$top/definition"
+   slug="<connector_slug>"; dst="<target_dir>"      # default connectors/<connector_slug>
+   tmp=$(mktemp -d); tgz="$tmp/repo.tgz"; err="$tmp/err"
+   if ! gh api "repos/analitiq-dip-registry/$slug/tarball/main" > "$tgz" 2> "$err"; then
+     # download failed — classify from gh's stderr; create NO target dir
+     grep -q 'HTTP 404' "$err" && echo "REFUSE registry_missing" || echo "REFUSE fetch_failed"
+     rm -rf "$tmp"
+   else
+     tar xzf "$tgz" -C "$tmp" 2>/dev/null                               # extract the whole archive…
+     src=$(find "$tmp" -maxdepth 2 -type d -name definition | head -1)  # …then locate definition/
+     if [ -n "$src" ] && [ -f "$src/connector.json" ]; then
+       mkdir -p "$dst"; mv "$src" "$dst/definition"; echo "OK"
+     else
+       echo "REFUSE fetch_failed"     # unextractable / truncated / no definition/connector.json
+     fi
+     rm -rf "$tmp"
+   fi
    ```
 
-   This lands `connectors/<slug>/definition/` with `connector.json`,
-   `endpoints/*.json` (API connectors), and any sibling definition files
-   — the whole connector, together, in one download. If the archive
-   download fails, return a structured refusal (see "Refusal shape") — do
-   **not** halt with a free-text error; the orchestrator needs the
-   discriminator. A `404` is `registry_missing` (no such slug in the
-   registry); any other non-2xx / transport error is `fetch_failed`.
+   Each guard covers a real failure the agent must not paper over:
+
+   - **Detect, don't assume.** `gh api > file` writes an error body on a
+     404/5xx and still exits non-zero; a truncated transfer yields an
+     archive that will not fully extract. Checking the `gh` exit status
+     **and** confirming `definition/connector.json` is on disk turns a
+     broken or empty download into a refusal, never a false
+     `status: "downloaded"` with an empty `endpoint_ids`.
+   - **Locate `definition/` by search, not by archive layout.** Do not
+     derive the top directory with `head -1` / `--strip-components`: a
+     GitHub `git archive` tarball can carry a `pax_global_header` first
+     entry that GNU tar lists (and bsdtar hides), which breaks that
+     approach on Linux. `find … -name definition` is layout- and
+     platform-independent.
+   - **Scratch first, commit last.** Extract under `mktemp -d` and create
+     `target_dir` only on success, so a failed download leaves **no** empty
+     `connectors/<slug>/` behind (which step 1 would later misread as
+     `target_exists`, wedging the slug). A unique scratch dir also keeps
+     parallel invocations of the same slug from colliding. Clean it up
+     either way.
+
+   On `REFUSE <reason>`, return the structured refusal (see "Refusal
+   shape") with that `reason` — do **not** halt with a free-text error and
+   do **not** leave a partial `target_dir`. On `OK`, continue to step 3;
+   `<target_dir>/definition/` now holds `connector.json`, `endpoints/*.json`
+   (API connectors), and any sibling definition files — the whole
+   connector, together.
 3. **Read identity from the downloaded connector (on disk).** Read
    `connectors/<slug>/definition/connector.json` for `kind` and
    `auth.type`. Derive the endpoint set by listing the **downloaded**
@@ -95,9 +127,11 @@ Return a structured refusal instead of the success summary above
 whenever any of the following trips:
 
 - **Step 1** — `target_dir` already exists on disk.
-- **Step 2** — the connector archive download fails (the whole
-  `definition/` tree comes down together, so there is no separate
-  per-endpoint fetch that can partially fail).
+- **Step 2** — the connector archive fails to download, fails to
+  extract, or yields no `definition/connector.json` (the step-2 snippet
+  prints `REFUSE <reason>`). Because the download is verified before
+  `target_dir` is created, a refusal never leaves a partial directory
+  behind.
 
 ```jsonc
 {
@@ -112,10 +146,11 @@ whenever any of the following trips:
 `reason` discriminator (normative):
 
 - `target_exists` — step 1: the target directory is already on disk.
-- `registry_missing` — HTTP 404 on the archive download. The connector
-  slug does not exist in the registry.
-- `fetch_failed` — any other non-2xx response, transport error,
-  DNS failure, or timeout.
+- `registry_missing` — HTTP 404 on the archive download (`gh` stderr
+  carries `HTTP 404`). The connector slug does not exist in the registry.
+- `fetch_failed` — any other archive-download failure (non-2xx,
+  transport error, DNS failure, timeout) **or** a download that arrives
+  but will not extract or contains no `definition/connector.json`.
 
 The orchestrator routes around `target_exists` (reuse the on-disk
 connector). `registry_missing` and `fetch_failed` are both halts —
