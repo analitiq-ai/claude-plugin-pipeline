@@ -166,6 +166,24 @@ def test_bundle_endpoint_filename_mismatch(tmp_path):
     assert not diag["passed"]
     assert any(f["validator"] == "endpoint-filename" and f["severity"] == "error"
                for f in diag["findings"]), diag["findings"]
+    # the filename guard is the *sole* error — a rename must not also break referential
+    # resolution, which would mask a guard regression
+    assert {f["validator"] for f in diag["findings"] if f["severity"] == "error"} == {"endpoint-filename"}
+
+
+def test_bundle_endpoint_missing_id_defers(tmp_path):
+    # the guard defers a missing/empty endpoint_id to the contract model (no false
+    # endpoint-filename finding); the malformed state is still caught referentially,
+    # never silently passed
+    doc = _build_bundle(tmp_path)
+    ep_dir = tmp_path / "connections/postgresql/definition/endpoints"
+    data = json.loads((ep_dir / f"{EID}.json").read_text())
+    data.pop("endpoint_id")
+    (ep_dir / f"{EID}.json").unlink()
+    (ep_dir / "whatever.json").write_text(json.dumps(data))
+    diag = V.diagnostics_for("pipeline", doc, bundle_root=tmp_path)
+    assert not any(f["validator"] == "endpoint-filename" for f in diag["findings"]), diag["findings"]
+    assert not diag["passed"]
 
 
 def test_unreadable_document(tmp_path):

@@ -112,10 +112,12 @@ def _endpoint_filename_findings(path: Path, endpoint: dict) -> list[dict]:
     its own `endpoint_id` registers under the wrong id and its stream endpoint-refs
     will not resolve at runtime — even though the id inside the file is correct and
     the referential checks (which resolve by that internal id) pass. Flag the
-    mismatch here, where the file sits at its materialized bundle location. Mirrors
-    the published validator's `endpoint-filename` gate, which the shared validator
-    applies to API endpoints but not yet to the database endpoints this plugin
-    authors."""
+    mismatch here, where the file sits at its materialized bundle location. The
+    published validator applies this `endpoint-filename` gate to API endpoints but
+    deliberately not to database endpoints (it models those as hash-named runtime
+    snapshots); the engine, however, resolves an authored bundle's connection-scoped
+    endpoints as flat `<endpoint_id>.json`, so the plugin enforces the gate here for
+    the endpoints it materializes."""
     endpoint_id = endpoint.get("endpoint_id")
     if not isinstance(endpoint_id, str) or not endpoint_id:
         return []  # a missing/invalid id is the contract model's job, not this check's

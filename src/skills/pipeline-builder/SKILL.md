@@ -275,11 +275,11 @@ and leaves everything else — including `.secrets/` — untouched.
    validate its **referenced closure** — every connection the pipeline references
    (public and private) and every connection-scoped private endpoint those
    connections own — each against its own contract (entities `connection` /
-   `database_endpoint`), plus the whole bundle with `bundle_root: .`. This is how a
-   stale, broken, or mis-named referenced artifact — e.g. an endpoint file whose
-   name no longer matches its `endpoint_id` (which the engine locates by filename
-   stem) — is caught at edit time instead of at engine runtime. Write only once
-   validation is clean.
+   `database_endpoint`), which catches a stale or broken referenced artifact; plus
+   the whole bundle with `bundle_root: .`, which additionally catches a mis-named
+   endpoint file whose name no longer matches its `endpoint_id` (the engine locates
+   it by filename stem). Both surface at edit time instead of at engine runtime.
+   Write only once validation is clean.
 5. Report exactly which files changed and which were left untouched.
 
 ## Output
