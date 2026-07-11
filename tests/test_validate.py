@@ -141,6 +141,8 @@ def test_valid_draft_bundle(tmp_path):
     # a draft pipeline is not yet runnable by design; require_runnable=False suppresses
     # the runnability findings entirely — no /pipeline/status finding is emitted
     assert not any(f["path"] == "/pipeline/status" for f in diag["findings"]), diag["findings"]
+    # a correctly-named endpoint yields no endpoint-filename finding (error or warning)
+    assert not any(f["validator"] == "endpoint-filename" for f in diag["findings"]), diag["findings"]
 
 
 def test_bundle_referential_error(tmp_path):
