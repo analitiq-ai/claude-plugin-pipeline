@@ -16,11 +16,14 @@ right one:
     plus the derived-``endpoint_id`` gate and column checks (the same code the
     ``analitiq-validate`` CLI runs).
   * ``connection`` / ``stream`` / ``pipeline`` -> the matching ``*Input`` Pydantic
-    model's ``.model_validate`` (the source of truth the published JSON Schemas
-    are rendered from; the CLI does not recognize these single-document kinds).
+    model's ``.model_validate`` (the source of truth the published JSON Schemas are
+    rendered from). We route by the caller-supplied ``--entity`` rather than the
+    validator's shape detection, since the entity kind is already known here.
   * ``pipeline`` with ``--bundle-root`` -> additionally
-    ``analitiq.validator.validate_pipeline_bundle`` over the on-disk bundle, for
-    the cross-document referential integrity no single document can verify.
+    ``analitiq.validator.validate_pipeline_bundle`` over the on-disk bundle, for the
+    cross-document referential integrity no single document can verify. A draft
+    bundle passes ``require_runnable=False`` (a not-yet-runnable draft is not an
+    authoring error); an ``active`` pipeline is held to full runnability.
 
 Validation is offline — no schema is fetched. Usage::
 
@@ -163,18 +166,13 @@ def _assemble_bundle(pipeline_doc: dict, document_path: Path, root: Path) -> tup
 def _bundle_findings(pipeline_doc: dict, document_path: Path, root: Path) -> list[dict]:
     from analitiq.validator import validate_pipeline_bundle
     bundle, findings = _assemble_bundle(pipeline_doc, document_path, root)
-    findings = findings + validate_pipeline_bundle(bundle)
-    # The bundle validator also enforces runnability (status must be 'active').
-    # This plugin authors draft bundles by design, so for a non-active pipeline the
-    # "not runnable" verdict is expected, not an authoring error — surface it as a
-    # warning (informational) while keeping every referential finding blocking.
-    if pipeline_doc.get("status") != "active":
-        for f in findings:
-            if f.get("validator") == "bundle-pipeline" and f.get("path") == "/pipeline/status":
-                f["severity"] = "warning"
-                f["message"] += (" (informational: this plugin authors draft bundles; "
-                                 "runnability applies once status is 'active')")
-    return findings
+    # This plugin authors draft bundles by design: a draft pipeline is not yet
+    # runnable, so its runnability verdicts are an author-time expectation, not a
+    # defect. Ask the bundle validator for referential integrity only
+    # (require_runnable=False) while the pipeline is a draft, and enforce runnability
+    # once it is authored 'active'. Every referential finding stays blocking either way.
+    require_runnable = pipeline_doc.get("status") == "active"
+    return findings + validate_pipeline_bundle(bundle, require_runnable=require_runnable)
 
 
 def diagnostics_for(entity: str, document_path: Path, bundle_root: Path | None = None) -> dict:

@@ -35,7 +35,8 @@ Rules:
 `status: active` requires runnable streams. Run with `--bundle-root`, the bundle
 referential checks error when an `active` pipeline has no streams (or when no
 referenced stream is itself `active`). A **draft** pipeline is legitimately not
-runnable, so that verdict is surfaced as a *warning*, not an error.
+yet runnable, so runnability is not checked for a draft (`require_runnable=False`);
+it is enforced only once the pipeline is `active`.
 
 ## Authoring sequence
 

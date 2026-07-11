@@ -113,6 +113,17 @@ def test_invalid_single_document(tmp_path, entity, doc, validator_id):
     assert any(f["validator"] == validator_id for f in diag["findings"]), diag["findings"]
 
 
+def test_active_pipeline_requires_stream_single_document(tmp_path):
+    # the published pipeline contract enforces active => >=1 stream reference at the
+    # single-document level; an active pipeline with empty streams is rejected without
+    # needing the bundle
+    doc = {**PIPELINE, "status": "active", "streams": []}
+    diag = V.diagnostics_for("pipeline", _write(tmp_path, "pipeline.json", doc))
+    assert not diag["passed"]
+    assert any(f["validator"] == "contract-model" and "stream" in f["message"].lower()
+               for f in diag["findings"]), diag["findings"]
+
+
 def _build_bundle(root: Path) -> Path:
     _write(root, "connectors/wise/definition/connector.json", {"connector_id": "wise", "kind": "api"})
     _write(root, "connectors/postgresql/definition/connector.json", {"connector_id": "postgresql", "kind": "database"})
@@ -127,8 +138,9 @@ def test_valid_draft_bundle(tmp_path):
     doc = _build_bundle(tmp_path)
     diag = V.diagnostics_for("pipeline", doc, bundle_root=tmp_path)
     assert diag["passed"], diag["findings"]
-    # a draft pipeline is not runnable; that finding is surfaced but downgraded to a warning
-    assert any(f["severity"] == "warning" and f["path"] == "/pipeline/status" for f in diag["findings"])
+    # a draft pipeline is not yet runnable by design; require_runnable=False suppresses
+    # the runnability findings entirely — no /pipeline/status finding is emitted
+    assert not any(f["path"] == "/pipeline/status" for f in diag["findings"]), diag["findings"]
 
 
 def test_bundle_referential_error(tmp_path):
@@ -185,8 +197,8 @@ def test_active_pipeline_not_runnable_stays_error(tmp_path):
     pipe["status"] = "active"
     doc.write_text(json.dumps(pipe))
     diag = V.diagnostics_for("pipeline", doc, bundle_root=tmp_path)
-    # an active pipeline with no runnable stream is a real error — the draft-status
-    # downgrade must NOT fire here
+    # an active pipeline with no runnable stream is a real error — require_runnable is
+    # True for an 'active' pipeline, so the runnability gate stays blocking
     assert not diag["passed"]
     assert any(f["validator"] == "bundle-pipeline" and f["severity"] == "error"
                for f in diag["findings"]), diag["findings"]

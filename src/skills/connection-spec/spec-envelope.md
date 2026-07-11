@@ -71,6 +71,7 @@ loads them into their secret store) before submission; the plugin never reads
 `.secrets/`.
 
 A pointer value must match one of the contract's accepted schemes —
-`env:NAME`, `file:PATH`, `ssm:/PATH`, `s3://BUCKET/KEY`,
-`arn:aws:secretsmanager:…`, or `arn:aws:ssm:…`. Use `env:` unless the user
-asks for a specific store; substitute their pointer verbatim if so.
+`env:NAME`, `file:PATH`, `sidecar:NAME`, `ssm:/PATH`, `s3://BUCKET/KEY`,
+`arn:aws:secretsmanager:…`, or `arn:aws:ssm:…` (`sidecar:NAME` names an entry in
+the connection's local credentials file). Use `env:` unless the user asks for a
+specific store; substitute their pointer verbatim if so.
