@@ -191,6 +191,68 @@ def test_bundle_endpoint_missing_id_warns(tmp_path):
     assert not diag["passed"]
 
 
+def _add_wise_endpoint(root: Path, endpoint_id: str = "transfers") -> None:
+    # Give the `wise` API connector a downloaded endpoint set on disk, so the plugin's
+    # scope='connector' verification has something to resolve against. (_build_bundle
+    # deliberately omits it — the connector's endpoint set is then 'unknown' and skipped.)
+    _write(root, f"connectors/wise/definition/endpoints/{endpoint_id}.json",
+           {"endpoint_id": endpoint_id})
+
+
+def test_bundle_connector_endpoint_ref_ok(tmp_path):
+    # a scope='connector' ref that names a real connector endpoint is clean — no warning
+    doc = _build_bundle(tmp_path)
+    _add_wise_endpoint(tmp_path, "transfers")  # matches STREAM's source endpoint_id
+    diag = V.diagnostics_for("pipeline", doc, bundle_root=tmp_path)
+    assert diag["passed"], diag["findings"]
+    assert not any(f["validator"] == "connector-endpoint-ref" for f in diag["findings"]), diag["findings"]
+
+
+def test_bundle_connector_endpoint_ref_missing_warns(tmp_path):
+    # a scope='connector' ref to an endpoint the connector does not publish is a
+    # WARNING (not an error — connectors are trusted, pinned at runtime), carrying a
+    # closest-match alignment suggestion; the pipeline still passes
+    doc = _build_bundle(tmp_path)
+    _add_wise_endpoint(tmp_path, "transfers")
+    stream_path = tmp_path / "pipelines/p/streams/orders.json"
+    stream = json.loads(stream_path.read_text())
+    stream["source"]["endpoint_ref"]["endpoint_id"] = "transferz"  # typo
+    stream_path.write_text(json.dumps(stream))
+    diag = V.diagnostics_for("pipeline", doc, bundle_root=tmp_path)
+    warn = [f for f in diag["findings"] if f["validator"] == "connector-endpoint-ref"]
+    assert len(warn) == 1, diag["findings"]
+    assert warn[0]["severity"] == "warning"
+    assert warn[0]["path"] == "/streams/0/source/endpoint_ref"
+    assert "transfers" in warn[0]["message"]  # the suggested real endpoint name
+    assert diag["passed"], "a warning must not fail validation"
+
+
+def test_bundle_connector_endpoint_case_mismatch_suggests(tmp_path):
+    # a case-only mismatch surfaces the correctly-cased connector endpoint as the
+    # alignment target
+    doc = _build_bundle(tmp_path)
+    _add_wise_endpoint(tmp_path, "transfers")
+    stream_path = tmp_path / "pipelines/p/streams/orders.json"
+    stream = json.loads(stream_path.read_text())
+    stream["source"]["endpoint_ref"]["endpoint_id"] = "Transfers"
+    stream_path.write_text(json.dumps(stream))
+    diag = V.diagnostics_for("pipeline", doc, bundle_root=tmp_path)
+    warn = [f for f in diag["findings"] if f["validator"] == "connector-endpoint-ref"]
+    assert len(warn) == 1 and "'transfers'" in warn[0]["message"], diag["findings"]
+
+
+def test_bundle_connector_endpoint_unknown_set_skips(tmp_path):
+    # no downloaded endpoint set for the connector => 'unknown', not 'empty': the check
+    # must skip rather than warn on a ref it cannot verify (false-positive guard)
+    doc = _build_bundle(tmp_path)  # no connectors/wise/definition/endpoints/
+    stream_path = tmp_path / "pipelines/p/streams/orders.json"
+    stream = json.loads(stream_path.read_text())
+    stream["source"]["endpoint_ref"]["endpoint_id"] = "does_not_exist"
+    stream_path.write_text(json.dumps(stream))
+    diag = V.diagnostics_for("pipeline", doc, bundle_root=tmp_path)
+    assert not any(f["validator"] == "connector-endpoint-ref" for f in diag["findings"]), diag["findings"]
+
+
 def test_unreadable_document(tmp_path):
     diag = V.diagnostics_for("pipeline", tmp_path / "does_not_exist.json")
     assert not diag["passed"]

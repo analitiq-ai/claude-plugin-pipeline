@@ -59,7 +59,11 @@ Analitiq services enforce) and normalizes every result into one envelope.
 - `passed` is `true` iff there is no `error`-severity finding; warnings are
   allowed. (A draft pipeline's runnability is not checked — the plugin authors
   drafts by design — so a draft produces no not-runnable finding; runnability is
-  enforced once the pipeline is `active`.)
+  enforced once the pipeline is `active`.) A `connector-endpoint-ref` **warning**
+  (a `scope: "connector"` stream ref naming an endpoint the downloaded connector
+  does not publish) is one such non-failing finding — forward it verbatim,
+  including its alignment suggestion; the orchestrator decides whether to realign
+  the stream ref.
 - If the command prints valid `Diagnostics` JSON on stdout, return it as-is even
   when it exits non-zero (`passed: false`). The orchestrator interprets the
   verdict.

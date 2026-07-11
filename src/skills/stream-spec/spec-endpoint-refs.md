@@ -59,3 +59,27 @@ Validated with `--bundle-root` (the `bundle-*` checks): every source
 destination `endpoint_ref.connection_id` is one of
 `pipeline.connections.destinations`; and every `scope: "connection"` ref resolves
 to a bundled database-endpoint document by `(connection_id, endpoint_id)`.
+
+## Connector-side endpoint verification (`connector-endpoint-ref`)
+
+The published bundle validator resolves `scope: "connection"` refs but leaves
+`scope: "connector"` refs unresolved — it receives connector *identity* only, not
+connector endpoint *contents*. The plugin closes that gap locally: with
+`--bundle-root`, each `scope: "connector"` ref is checked against the referenced
+connection's connector endpoint set on disk
+(`connectors/<slug>/definition/endpoints/*.json`, resolved
+`endpoint_ref.connection_id` → `connection.connector_id` → connector dir).
+
+- If the `endpoint_id` exists in that set → clean.
+- If it does not → a **`connector-endpoint-ref` warning** (never an error;
+  connectors are trusted registry artifacts pinned by `connector_version` at
+  runtime), carrying a closest-match **alignment suggestion** ("Did you mean
+  `transfers`?").
+- If the connector's endpoint set is not on disk (connector not downloaded) → the
+  ref is **skipped**, not warned; an unknown set is never treated as empty.
+
+Because it is a warning, it does not fail validation. The orchestrator surfaces it
+and, on the user's confirmation, **aligns** the stream's `endpoint_ref.endpoint_id`
+to the connector's real endpoint name. The plugin never edits the connector — only
+the stream ref moves. Endpoint refs live only in streams, so alignment is always a
+stream edit.
