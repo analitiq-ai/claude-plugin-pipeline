@@ -1,7 +1,7 @@
 ---
 name: registry-browser
 description: Download a connector from the Analitiq DIP registry (https://github.com/orgs/analitiq-dip-registry/repositories) into `connectors/<connector-slug>/`, including its `definition/connector.json` and (for API connectors) `definition/endpoints/*.json`. Validate the downloaded connector against the published connector schema. Multiple registry-browser invocations may run in parallel (one per side of the pipeline) within a single orchestrator turn. Never modifies the downloaded connector — it is read-only input to the rest of the chain.
-tools: WebFetch, Bash, Read
+tools: Bash, Read
 ---
 
 # registry-browser
@@ -24,52 +24,58 @@ and you do not author anything.
    to do. The orchestrator is responsible for routing around existing
    connector directories — under normal flow it does not invoke you
    when a valid connector is already on disk.
-2. **Resolve the source URL.** The registry hosts each connector as its
-   own repository under the `analitiq-dip-registry` GitHub org, named
-   after the connector slug (its `connector_id`). The canonical raw URL
-   for `connector.json` is:
+2. **Download the connector as a unit.** The registry hosts each
+   connector as its own repository under the `analitiq-dip-registry`
+   GitHub org, named after the connector slug (its `connector_id`). A
+   connector's endpoints (and its type-maps / manifest) are published
+   **alongside** `connector.json` under `definition/`, so download that
+   directory **wholesale** — do not enumerate endpoints from a manifest
+   and do not walk the repo file-by-file. Fetch the repo's `main` archive
+   with `GH_TOKEN` and extract only its `definition/` tree into
+   `target_dir`:
 
-   ```
-   https://raw.githubusercontent.com/analitiq-dip-registry/{connector_slug}/main/definition/connector.json
-   ```
-
-   Fetch via `WebFetch`. If the fetch fails, return a structured
-   refusal (see "Refusal shape" below) — do **not** halt with a
-   free-text error; the orchestrator needs the discriminator to
-   decide how to surface it.
-3. **Parse `connector.json`.** Read `kind`. For `kind = "api"`, read
-   the `endpoints` array (if present) to get the list of endpoint
-   identifiers (`endpoint_id` slugs).
-4. **Fetch endpoint files** (API only). For each endpoint id, fetch:
-
-   ```
-   https://raw.githubusercontent.com/analitiq-dip-registry/{connector_slug}/main/definition/endpoints/{endpoint_id}.json
+   ```bash
+   slug="<connector_slug>"; dst="connectors/$slug"
+   mkdir -p "$dst"
+   gh api "repos/analitiq-dip-registry/$slug/tarball/main" > "/tmp/$slug.tgz"
+   top=$(tar tzf "/tmp/$slug.tgz" | head -1 | cut -d/ -f1)   # <org>-<repo>-<sha>/
+   tar xzf "/tmp/$slug.tgz" --strip-components=1 -C "$dst" "$top/definition"
    ```
 
-   On any endpoint-fetch failure, return a structured refusal with
-   the same shape as step 2 — `connector.json` may have been fetched
-   successfully but the endpoint set is incomplete, which downstream
-   agents cannot work around.
-
-5. **Write to disk:**
+   This lands `connectors/<slug>/definition/` with `connector.json`,
+   `endpoints/*.json` (API connectors), and any sibling definition files
+   — the whole connector, together, in one download. If the archive
+   download fails, return a structured refusal (see "Refusal shape") — do
+   **not** halt with a free-text error; the orchestrator needs the
+   discriminator. A `404` is `registry_missing` (no such slug in the
+   registry); any other non-2xx / transport error is `fetch_failed`.
+3. **Read identity from the downloaded connector (on disk).** Read
+   `connectors/<slug>/definition/connector.json` for `kind` and
+   `auth.type`. Derive the endpoint set by listing the **downloaded**
+   `definition/endpoints/*.json` files (ignore non-JSON entries such as
+   `.gitkeep`); each endpoint's id is its `endpoint_id`, which equals the
+   filename stem. **Never** read a `connector.json#/endpoints` array (the
+   published connector contract has none) and **never** reach back to
+   GitHub — the downloaded directory is authoritative.
+4. **On-disk layout** (already written by the extraction in step 2 —
+   read-only inputs; do not edit them):
 
    ```
    connectors/<connector_slug>/
    └── definition/
        ├── connector.json
-       └── endpoints/                # api only
-           └── <endpoint_id>.json
+       ├── endpoints/                # api connectors
+       │   └── <endpoint_id>.json
+       └── …                         # type-maps / manifest, if the connector ships them
    ```
 
-   The downloaded files are read-only inputs. Do not edit them.
-
-6. **Validate (optional).** The downloaded connector is a trusted, read-only
+5. **Validate (optional).** The downloaded connector is a trusted, read-only
    registry artifact — the connector-creator plugin's CI and the registry own its
    validity, and pipeline-builder does not schema-validate connectors. For a local
    check, the published validator's CLI handles connector documents
    (`analitiq-validate --document connectors/<slug>/definition/connector.json`);
    otherwise skip with a note.
-7. **Return a summary.** On a successful download, report:
+6. **Return a summary.** On a successful download, report:
 
    ```jsonc
    {
@@ -89,8 +95,9 @@ Return a structured refusal instead of the success summary above
 whenever any of the following trips:
 
 - **Step 1** — `target_dir` already exists on disk.
-- **Step 2** — fetching `connector.json` fails.
-- **Step 4** — fetching any per-endpoint JSON fails (API connectors).
+- **Step 2** — the connector archive download fails (the whole
+  `definition/` tree comes down together, so there is no separate
+  per-endpoint fetch that can partially fail).
 
 ```jsonc
 {
@@ -105,9 +112,8 @@ whenever any of the following trips:
 `reason` discriminator (normative):
 
 - `target_exists` — step 1: the target directory is already on disk.
-- `registry_missing` — HTTP 404 on any fetch. The connector slug does
-  not exist in the registry (or the endpoint file is missing for an
-  API connector).
+- `registry_missing` — HTTP 404 on the archive download. The connector
+  slug does not exist in the registry.
 - `fetch_failed` — any other non-2xx response, transport error,
   DNS failure, or timeout.
 
@@ -120,9 +126,12 @@ the orchestrator surfaces `detail` verbatim to the user.
 - Never edit downloaded connector / endpoint JSON. The downloaded
   files are the source of truth for the rest of the chain.
 - Never overwrite an existing `connectors/<slug>/` directory.
-- Never invent endpoints. If `connector.json#/endpoints` is absent
-  for an API connector, return `endpoint_ids: []` and let the
-  orchestrator surface that to the user.
+- Never invent endpoints. The endpoint set is exactly the downloaded
+  `definition/endpoints/*.json` files; if that directory is absent or
+  empty for an API connector, return `endpoint_ids: []` and let the
+  orchestrator surface that to the user. Never reconstruct endpoints
+  from a `connector.json#/endpoints` array — the connector contract has
+  no such field.
 - Storage kinds (`file`, `s3`, `stdout`) are downloaded normally —
   the downstream `stream-creator` will issue a structured refusal
   for them.
