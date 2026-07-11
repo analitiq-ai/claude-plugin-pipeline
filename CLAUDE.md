@@ -65,7 +65,7 @@ The plugin does not ship a validator — it consumes the published, offline `ana
 - `connection` / `stream` / `pipeline` → the matching `*Input` Pydantic model (`ConnectionInput` / `StreamInput` / `PipelineInput`) — the source of truth the published JSON Schemas render from.
 - `pipeline` with `--bundle-root` → additionally `analitiq.validator.validate_pipeline_bundle` for cross-document referential integrity (stream↔pipeline parentage, connection role wiring, endpoint-ref resolution). A draft pipeline is not yet runnable by design, so the adapter passes `require_runnable=False` for drafts (no not-runnable finding is produced); runnability is enforced only once the pipeline is `active`.
 
-The adapter self-installs the pinned validator (`analitiq-validator==1.0.0rc4`, see `requirements-dev.txt` / `src/scripts/_analitiq.py`) into a managed virtualenv on first use and is offline thereafter. `src/scripts/endpoint_id.py` reuses the same package to compute the derived database-endpoint identity. Run directly:
+The adapter self-installs the pinned validator (`analitiq-validator==1.0.0rc5`, see `requirements-dev.txt` / `src/scripts/_analitiq.py`) into a managed virtualenv on first use and is offline thereafter. `src/scripts/endpoint_id.py` reuses the same package to compute the derived database-endpoint identity. Run directly:
 
 ```bash
 python3 src/scripts/validate.py --entity pipeline --document path/to/pipeline.json --bundle-root path/to/project
