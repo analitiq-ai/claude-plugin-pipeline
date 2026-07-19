@@ -186,9 +186,9 @@ Do NOT load `pipeline-spec`, `stream-spec`, `connection-spec`, or
 
    For each table the user selects, check whether an endpoint file for
    it already exists under `connections/<connection-slug>/definition/endpoints/`.
-   The filename is the endpoint's **derived** `endpoint_id`
-   (`slug(schema)__slug(name)[__slug(catalog)]__hash8`); compute it for
-   the table with `scripts/endpoint_id.py` to know the filename:
+   The filename is the endpoint's **derived** `endpoint_id`; compute it
+   for the table with `scripts/endpoint_id.py` to know the filename —
+   never hand-write one (see `endpoint-spec/spec-database-object.md`):
    - **If yes** → reuse it. Validate it (entity `database_endpoint`) so
      a stale shape is caught early. If validation passes, record reuse
      in the final summary and do **not** re-introspect or rewrite the
@@ -338,6 +338,10 @@ Report to the user:
   model-driven — no schema is fetched. See `references/schema-hosts.md`.
 - The published schemas are **closed** (`additionalProperties: false`).
   Do not author unknown fields, including `x-*` extension keys.
+- Never infer undeclared behavior. If the contract does not declare a
+  request, transport, auth, pagination, replication, resource-discovery
+  or lifecycle rule, do not guess one — surface the gap to the user
+  instead of inventing a shape the engine will not honor.
 - Never overwrite an existing `pipelines/<pipeline-slug>/` directory in
   build mode. The pre-flight check (phase 0) halts and asks the user to
   pick a different slug or remove the directory themselves.

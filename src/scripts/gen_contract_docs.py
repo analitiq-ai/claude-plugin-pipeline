@@ -73,13 +73,16 @@ def _code(value: object) -> str:
 
 def render_schema_urls() -> str:
     from analitiq.contracts.connection import CONNECTION_SCHEMA_URL
+    from analitiq.contracts.endpoints import DATABASE_ENDPOINT_SCHEMA_URL
     from analitiq.contracts.pipelines.config import PIPELINE_SCHEMA_URL
     from analitiq.contracts.stream import STREAM_SCHEMA_URL
 
     rows = [
-        ("Pipeline", "pipeline.json", PIPELINE_SCHEMA_URL),
-        ("Stream", "streams/<stream-slug>.json", STREAM_SCHEMA_URL),
-        ("Connection", "connection.json", CONNECTION_SCHEMA_URL),
+        ("Pipeline", "pipelines/<slug>/pipeline.json", PIPELINE_SCHEMA_URL),
+        ("Stream", "pipelines/<slug>/streams/<stream-slug>.json", STREAM_SCHEMA_URL),
+        ("Connection", "connections/<slug>/connection.json", CONNECTION_SCHEMA_URL),
+        ("Database endpoint", "connections/<slug>/definition/endpoints/<endpoint_id>.json",
+         DATABASE_ENDPOINT_SCHEMA_URL),
     ]
     out = ["| Entity | Authored file | `$schema` value |", "|---|---|---|"]
     out += [f"| {e} | {_code(f)} | {_code(u)} |" for e, f, u in rows]
@@ -227,6 +230,10 @@ def render_advisory_stream() -> str:
     return _advisory_block(("ADV-STRM-",))
 
 
+def render_advisory_endpoint() -> str:
+    return _advisory_block(("ADV-DBEP-",))
+
+
 def render_validator_ids() -> str:
     from analitiq.validator import VALIDATOR_IDS
 
@@ -286,6 +293,19 @@ FIELD_TABLE_MODELS = {
     "fields-logging": ("analitiq.contracts.pipelines.config", "Logging"),
     "fields-error-handling": ("analitiq.contracts.pipelines.config", "ErrorHandling"),
     "fields-pipeline-connections": ("analitiq.contracts.pipelines.config", "PipelineConnections"),
+    "fields-database-endpoint": ("analitiq.contracts.endpoints", "DatabaseEndpointDoc"),
+    "fields-database-object": ("analitiq.contracts.endpoints", "DatabaseObject"),
+    "fields-column": ("analitiq.contracts.endpoints", "Column"),
+    "fields-stream-source": ("analitiq.contracts.stream", "StreamSource"),
+    "fields-stream-destination": ("analitiq.contracts.stream", "StreamDestination"),
+    "fields-stream-write": ("analitiq.contracts.stream", "Write"),
+    "fields-stream-execution": ("analitiq.contracts.stream", "Execution"),
+    "fields-connector-endpoint-ref": ("analitiq.contracts.stream", "ConnectorEndpointRef"),
+    "fields-connection-endpoint-ref": ("analitiq.contracts.stream", "ConnectionEndpointRef"),
+    "fields-stream-mapping": ("analitiq.contracts.stream", "StreamMapping"),
+    "fields-assignment-target": ("analitiq.contracts.stream", "AssignmentTarget"),
+    "fields-assignment-value": ("analitiq.contracts.stream", "AssignmentValue"),
+    "fields-validation-rule": ("analitiq.contracts.stream", "ValidationRule"),
 }
 
 _CONSTRAINT_KEYS = (
@@ -342,7 +362,7 @@ def _constraint_summary(schema: dict) -> str:
         for key, label in (("pattern", "item pattern"), ("minLength", "item minLength")):
             if key in items:
                 parts.append(f"{label}={items[key]}")
-    return ", ".join(f"`{p}`" for p in parts) if parts else "—"
+    return ", ".join(_code(p) for p in parts) if parts else "—"
 
 
 def _render_field_table(module_path: str, class_name: str) -> str:
@@ -405,16 +425,116 @@ def render_enum_vocabulary() -> str:
             f"| {label} | {', '.join(f'`{m}`' for m in members)} "
             f"| `{module_path}.{class_name}.{field}` |"
         )
+
+    # Two vocabularies are not plain Literal fields: replication and pagination are
+    # discriminated unions, so their members live on each variant's discriminator.
+    from analitiq.contracts import stream
+
+    for label, union, union_name, discriminator in (
+        ("`stream.source.replication.method`", stream.Replication, "Replication", "method"),
+        ("`stream.source.database_pagination.type`", stream.DatabasePagination,
+         "DatabasePagination", "type"),
+    ):
+        variants = get_args(get_args(union)[0])
+        members = [get_args(v.model_fields[discriminator].annotation)[0] for v in variants]
+        if not members:
+            raise RuntimeError(f"{union_name} exposed no discriminator members")
+        out.append(
+            f"| {label} | {', '.join(f'`{m}`' for m in members)} "
+            f"| discriminated union `analitiq.contracts.stream.{union_name}` |"
+        )
+
+    # `write.mode` is deliberately an open string: a database destination is closed
+    # to the set below, but an API destination's mode is whatever key the endpoint
+    # declares under operations.write, which no contract enum can enumerate.
+    out.append(
+        f"| `stream.destinations[].write.mode` (database) "
+        f"| {', '.join(f'`{m}`' for m in sorted(stream._DB_WRITE_MODES))} "
+        f"| `ADV-STRM-013` (API modes are endpoint-declared, so the field itself is `str`) |"
+    )
+    out.append(
+        f"| `…endpoint_ref.scope` "
+        f"| `{stream.SCOPE_CONNECTOR}`, `{stream.SCOPE_CONNECTION}` "
+        f"| `analitiq.contracts.stream.SCOPE_CONNECTOR` / `SCOPE_CONNECTION` |"
+    )
+    return "\n".join(out) + "\n"
+
+
+def _split_top_level_alternatives(pattern: str) -> list[str]:
+    """Split a regex alternation on its top-level `|` only, ignoring nesting."""
+    parts, depth, current = [], 0, []
+    escaped = False
+    for char in pattern:
+        if escaped:
+            current.append(char)
+            escaped = False
+            continue
+        if char == "\\":
+            current.append(char)
+            escaped = True
+            continue
+        if char in "([":
+            depth += 1
+        elif char in ")]":
+            depth -= 1
+        if char == "|" and depth == 0:
+            parts.append("".join(current))
+            current = []
+            continue
+        current.append(char)
+    parts.append("".join(current))
+    return parts
+
+
+def render_arrow_types() -> str:
+    """The Arrow type vocabulary, split out of the published column pattern.
+
+    `arrow_type` is one regex covering scalars, parameterized types and
+    containers. Prose used to transcribe it as several hand-kept tables; this
+    splits the published pattern instead, so the vocabulary cannot drift.
+    """
+    from analitiq.contracts.endpoints import ARROW_TYPE_PATTERN
+
+    alternatives = _split_top_level_alternatives(
+        ARROW_TYPE_PATTERN.removeprefix("^(?:").removesuffix(")$"))
+    plain = [a for a in alternatives if a.replace("_", "").isalnum()]
+    parameterized = [a for a in alternatives if a not in plain and "<" not in a]
+    containers = [a for a in alternatives if "<" in a]
+    if not (plain and parameterized and containers):
+        raise RuntimeError("could not split ARROW_TYPE_PATTERN into its three families")
+
+    out = [
+        "`arrow_type` is validated by one published regex, "
+        "`analitiq.contracts.endpoints.ARROW_TYPE_PATTERN`. Its top-level "
+        "alternatives fall into three families.",
+        "",
+        "**Plain names** — write them exactly as shown:",
+        "",
+        ", ".join(f"`{a}`" for a in plain),
+        "",
+        "**Parameterized** — the parameter is part of the type and is *not* optional; "
+        "a bare name here is rejected:",
+        "",
+    ]
+    out += [f"- `{a}`" for a in parameterized]
+    out += [
+        "",
+        "**Containers** — the inner type is itself an `arrow_type`:",
+        "",
+    ]
+    out += [f"- `{a}`" for a in containers]
     return "\n".join(out) + "\n"
 
 
 RENDERERS = {
+    "arrow-types": render_arrow_types,
     "schema-urls": render_schema_urls,
     "shared-vocabulary": render_shared_vocabulary,
     "secret-ref-grammar": render_secret_ref_grammar,
     "filter-operators": render_filter_operators,
     "advisory-pipeline": render_advisory_pipeline,
     "advisory-stream": render_advisory_stream,
+    "advisory-endpoint": render_advisory_endpoint,
     "validator-ids": render_validator_ids,
     "endpoint-id-derivation": render_endpoint_id_derivation,
     "enum-vocabulary": render_enum_vocabulary,

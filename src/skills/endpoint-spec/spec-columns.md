@@ -34,37 +34,43 @@ Use `"unknown"` as a sentinel when the engine doesn't expose a type.
 
 ## `arrow_type`
 
-Required. Fully-qualified Apache Arrow canonical type string. Base names
-are PascalCase from `arrow/format/Schema.fbs`. Parameterized types must
-carry their parameters — bare `Timestamp`, `Decimal128`, `Time64`,
-`Duration`, `Interval`, `FixedSizeBinary`, `List`, `Struct`, `Map`, etc.
-are rejected by the published schema.
+Required. Fully-qualified Apache Arrow canonical type string. Base names are
+PascalCase from `arrow/format/Schema.fbs`.
 
-### Three shapes
+<!-- BEGIN GENERATED: arrow-types -->
+`arrow_type` is validated by one published regex, `analitiq.contracts.endpoints.ARROW_TYPE_PATTERN`. Its top-level alternatives fall into three families.
 
-| Shape | Used for | Examples |
-|---|---|---|
-| Bare name | Scalar types with no parameters | `Utf8`, `Int64`, `Boolean`, `Date32`, `Binary` |
-| Parens `( )` | Parameterized scalars (units, precision/scale, byte widths) | `Decimal128(38, 9)`, `Timestamp(MICROSECOND, UTC)`, `FixedSizeBinary(16)` |
-| Angles `< >` | Nested types | `List<Int64>`, `Struct<id:Int64, name:Utf8>`, `Map<Utf8, Int64>` |
+**Plain names** — write them exactly as shown:
 
-### Unit values
+`Null`, `Boolean`, `Int8`, `Int16`, `Int32`, `Int64`, `UInt8`, `UInt16`, `UInt32`, `UInt64`, `Float16`, `Float32`, `Float64`, `Utf8`, `LargeUtf8`, `Binary`, `LargeBinary`, `Date32`, `Date64`, `Object`, `List`, `Json`
 
-The literal Flatbuffers enum identifiers, uppercase:
+**Parameterized** — the parameter is part of the type and is *not* optional; a bare name here is rejected:
 
-- `TimeUnit`: `SECOND`, `MILLISECOND`, `MICROSECOND`, `NANOSECOND`
-- `IntervalUnit`: `YEAR_MONTH`, `DAY_TIME`, `MONTH_DAY_NANO`
+- `FixedSizeBinary\([1-9][0-9]*\)`
+- `Time32\((?:SECOND|MILLISECOND)\)`
+- `Time64\((?:MICROSECOND|NANOSECOND)\)`
+- `Timestamp\((?:SECOND|MILLISECOND|MICROSECOND|NANOSECOND)(?:\s*,\s*(?:null|[A-Za-z_][A-Za-z0-9_/\-]*|Etc/GMT[+\-][0-9]{1,2}|[+\-](?:0[0-9]|1[0-4]):[0-5][0-9]))?\)`
+- `Duration\((?:SECOND|MILLISECOND|MICROSECOND|NANOSECOND)\)`
+- `Interval\((?:YEAR_MONTH|DAY_TIME|MONTH_DAY_NANO)\)`
+- `Decimal128\((?:[1-9]|[12][0-9]|3[0-8])\s*,\s*-?[0-9]+\)`
+- `Decimal256\((?:[1-9]|[1-6][0-9]|7[0-6])\s*,\s*-?[0-9]+\)`
 
-Not every type accepts every unit. The published regex restricts:
+**Containers** — the inner type is itself an `arrow_type`:
 
-| Type | Allowed units |
-|---|---|
-| `Time32` | `SECOND`, `MILLISECOND` only |
-| `Time64` | `MICROSECOND`, `NANOSECOND` only |
-| `Timestamp`, `Duration` | all four `TimeUnit` values |
-| `Interval` | `IntervalUnit` values only |
+- `List<.+>`
+- `LargeList<.+>`
+- `FixedSizeList<.+>\[[1-9][0-9]*\]`
+- `Struct<.+>`
+- `Map<.+,\s*.+>`
+- `SparseUnion<.+>`
+- `DenseUnion<.+>`
+- `Dictionary<.+,\s*.+>`
+- `RunEndEncoded<.+,\s*.+>`
+<!-- END GENERATED: arrow-types -->
 
-`Time32(MICROSECOND)` and `Time64(SECOND)` are rejected.
+Units are the literal Flatbuffers enum identifiers, uppercase, and each type
+admits only the units its alternative above lists — `Time32(MICROSECOND)` and
+`Time64(SECOND)` are rejected.
 
 ### `Timestamp` timezone
 
@@ -127,7 +133,7 @@ or `Binary` over guessing a `Struct<…>` field list.
 
 ### Inner grammar for `Struct<…>` / `Map<…>`
 
-The published regex enforces only that the angle brackets are present and
+`ARROW_TYPE_PATTERN` enforces only that the angle brackets are present and
 non-empty (`Struct<.+>`, `Map<.+, .+>`); the inner grammar shown above
 (`field:Type, …` for structs; `key, value` for maps) is the recommended
 convention but is **not** regex-enforced. Stay consistent with the
@@ -158,8 +164,12 @@ Omit for schemaless engines (MongoDB).
 
 ## Uniqueness
 
-The contract model enforces:
+The contract model enforces three advisory rules over this array:
 
-- `name` values are unique within the array.
-- `ordinal_position` values are unique within the array (when present).
-- Every `primary_keys[]` entry must reference an existing `name`.
+<!-- BEGIN GENERATED: advisory-endpoint -->
+| Rule | Constraint |
+|---|---|
+| `ADV-DBEP-001` | columns[].name must be unique. |
+| `ADV-DBEP-002` | columns[].ordinal_position must be unique where present. |
+| `ADV-DBEP-003` | primary_keys must reference declared columns[].name. |
+<!-- END GENERATED: advisory-endpoint -->

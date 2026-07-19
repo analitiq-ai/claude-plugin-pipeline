@@ -6,9 +6,18 @@ field with the same name and the type the registry derives from the
 shared canonical-type vocabulary.
 
 When you do author it, the shape is **assignments-only**. The registry
-computes `assignments_hash`, `source_to_generic`,
-`generic_to_destination`, and `type_mapping_assignments_hash`. **The
-plugin must not author those fields.**
+computes `source_to_generic`, `generic_to_destination`, and the mapping hashes.
+**The plugin must not author those fields** — they are not on the authored model
+at all, so a client-supplied value is rejected outright.
+
+`mapping` is also the *only* stream-owned place where field assignment and type
+coercion are declared. If a transformation is expressible here, it belongs here;
+if it is not, it belongs to the connector or the destination endpoint, never to a
+side channel invented on the stream.
+
+The accepted shape is `analitiq.contracts.stream.StreamMapping`, with
+`analitiq.contracts.stream.{Assignment, AssignmentTarget, AssignmentValue,
+ConstantValue, GetExpression, PipeExpression, FnExpression}` for its members.
 
 ```jsonc
 {
@@ -16,12 +25,12 @@ plugin must not author those fields.**
     "assignments": [
       {
         "target": {
-          "path": "id",                  // required; destination field reference
-          "arrow_type": "Utf8",          // required; fully-qualified Arrow canonical type
-          "native_type": "uuid",         // optional; destination-native type override
-          "nullable": false              // default true
+          "path": "id",
+          "arrow_type": "Utf8",
+          "native_type": "uuid",
+          "nullable": false
         },
-        "value": {                       // exactly one of expression / constant
+        "value": {
           "expression": {"op": "get", "path": "id"}
         }
       },
@@ -36,56 +45,70 @@ plugin must not author those fields.**
 }
 ```
 
+## `assignments` order is significant
+
+`assignments[]` is a sequence, not a set. The engine applies assignments in the
+order authored, so preserve the order a caller gave you and never re-sort the
+array for tidiness — a reordering is a semantic change, and in edit mode it is a
+diff the user did not ask for.
+
 ## `assignments[].value`
 
-Exactly one of `expression` or `constant` (the contract model rejects both or
-neither):
+Exactly one of `expression` or `constant` (`ADV-STRM-008`):
 
 - `expression` — one of:
   - `{"op": "get", "path": "<source field>"}` — read a source field. The default;
     it covers almost every mapping.
   - `{"op": "pipe", "args": [{"op": "get", "path": "<source field>"}, {"op": "fn", "name": "<conversion>"}, …]}` —
-    a `get` seed passed through one or more `fn` conversion stages. An `fn` node is
-    valid **only** inside `pipe.args`, never standalone. Author `pipe` only when a
-    conversion is genuinely required; otherwise prefer `get`.
+    a `get` seed passed through one or more `fn` conversion stages
+    (`ADV-STRM-005`). An `fn` node is valid **only** inside `pipe.args`, never
+    standalone. Author `pipe` only when a conversion is genuinely required;
+    otherwise prefer `get`.
 - `constant` — `{"arrow_type": "<fully-qualified Arrow type>", "value": <JSON value>}`.
+
+### When a bare `get` is not enough
+
+The engine's conversion matrix classifies each `(source type, target type)` pair.
+A pair classified **`explicit`** — `Int64 → Utf8` is the canonical example — is
+writable only when the assignment names the matrix's conversion `fn` in a `pipe`.
+A bare `get` across such a pair is **rejected**, not silently coerced. So when
+source and target Arrow types differ, check the pair before reaching for `get`:
+if it is an explicit conversion, the assignment must be
+`{"op": "pipe", "args": [{"op": "get", …}, {"op": "fn", "name": …}]}`. The
+conversion function names are closed (`analitiq.contracts.stream.FnExpression`);
+the engine's `version`/`args` node fields are deliberately not published, so
+never author them.
 
 ## `assignments[].target.path`
 
-Must be unique within `assignments`; the contract model rejects duplicates.
+Must be unique within `assignments` (`ADV-STRM-002`).
 
-Cross-document: each `target.path` must exist in the resolved
-destination endpoint schema. Endpoint resolution is server-side at
-save time; the local validator does **not** check this.
+`target.path` addresses the **assignment root only** — the destination field this
+assignment writes. Inner structure is declared recursively by `properties` (for
+an `Object` target) and `items` (for a `List` target), governed by `ADV-STRM-010`.
+Child field specs are **not** separately addressable from `assignments`: you
+cannot write a second assignment at `address.city` to reach inside an `address`
+Object target. One assignment owns one root and declares everything beneath it.
+
+Cross-document: each `target.path` must exist in the resolved destination
+endpoint schema. Endpoint resolution is server-side at save time; the local
+validator does **not** check this.
 
 ## `arrow_type` vocabulary
 
-Both `target.arrow_type` and `constant.arrow_type` are **required** and
-must be **fully-qualified** Apache Arrow canonical type strings. The
-published `stream/latest.json` schema rejects bare parameterized forms
-(`Timestamp`, `Decimal128`, `Time64`, `Duration`, `Interval`,
-`FixedSizeBinary`, `List`, `Struct`, `Map`, …). See
-[`endpoint-spec/spec-columns.md`](../endpoint-spec/spec-columns.md)
-for the canonical reference: the three shapes (bare / `( )` / `< >`),
-unit identifiers, and timezone forms apply identically here.
+Both `target.arrow_type` and `constant.arrow_type` are **required** and must be
+**fully-qualified** Apache Arrow canonical type strings. The vocabulary is owned
+by `analitiq.contracts.endpoints.ARROW_TYPE_PATTERN` — the same pattern the
+endpoint columns use — so bare parameterized forms (`Timestamp`, `Decimal128`,
+`Time64`, `Duration`, `Interval`, `FixedSizeBinary`, …) are rejected. See
+[`endpoint-spec/spec-columns.md`](../endpoint-spec/spec-columns.md) for the
+canonical walkthrough: the three shapes (bare / `( )` / `< >`), unit identifiers
+and timezone forms apply identically here.
 
-Common forms:
+Container shape is not free-form either: `ADV-STRM-006`, `ADV-STRM-007` and
+`ADV-STRM-010` tie `arrow_type` to whether the field declares `properties`,
+`items`, or neither, and tie a constant's JSON kind to its declared type.
 
-| arrow_type | description |
-|---|---|
-| `Utf8` | UTF-8 string |
-| `Int32`, `Int64`, `UInt64` | signed / unsigned integers |
-| `Float32`, `Float64` | floating point |
-| `Boolean` | boolean |
-| `Decimal128(p, s)` | fixed precision; carry precision and scale from `native_type` (e.g. `NUMERIC(12,2)` → `Decimal128(12, 2)`) |
-| `Date32` | calendar date |
-| `Timestamp(MICROSECOND)` / `Timestamp(MICROSECOND, UTC)` | timestamp without / with timezone |
-| `Time64(MICROSECOND)` | time-of-day |
-| `Binary` | raw bytes |
-| `List<…>`, `Struct<…>`, `Map<…, …>` | composite |
-
-The full vocabulary is owned by
-`analitiq-infra/docs/schema-contracts/shared/canonical-types.json`.
 Stick to what the destination endpoint's `columns[]` declares — if the
-destination column is `Decimal128(12, 2)`, the assignment's
-`target.arrow_type` must match exactly.
+destination column is `Decimal128(12, 2)`, the assignment's `target.arrow_type`
+must match exactly, precision and scale included.

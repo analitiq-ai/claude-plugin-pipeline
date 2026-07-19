@@ -8,8 +8,11 @@ slug+hash. Pass the identifiers **verbatim** from introspection (no case-folding
 or pre-slugging — the hash is computed over the raw values). Prints one JSON
 object:
 
-    {"endpoint_id": "<slug(schema)__slug(name)[__slug(catalog)]__hash8>",
+    {"endpoint_id": "<derived handle>",
      "database_object": {"name": ..., "schema"?: ..., "catalog"?: ..., "object_type": ...}}
+
+The handle's exact composition is the published helper's business, not this
+adapter's — restating it here is how the two drift.
 
 Usage:
     python3 scripts/endpoint_id.py --schema public --name orders [--catalog db] [--object-type view]

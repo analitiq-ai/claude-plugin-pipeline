@@ -1,5 +1,8 @@
 # `streams` and `status`
 
+Both fields are declared on `PipelineInput` — see the field table in `SKILL.md`
+for their types, defaults and constraints.
+
 ## `streams`
 
 An array of **stream UUIDs**. Each entry is the `stream_id` of a stream
@@ -16,19 +19,28 @@ defined in a sibling `streams/<stream-slug>.json` file.
 
 Rules:
 
-- UUIDs are unique within the array (`uniqueItems: true` in the schema).
+- Uniqueness is checked on the **version-stripped base id**, not merely on the
+  literal string — `ADV-PIPE-003` in the cross-field rule table in `SKILL.md`.
 - Each referenced stream's `pipeline_id` must equal this pipeline's
   `pipeline_id`. The bundle referential checks enforce this when
   `--bundle-root` is supplied.
+- Array order is **display-only**. The runtime treats `streams` as an unordered
+  set and the contract defines no inter-stream dependencies, so never encode
+  "run A before B" by ordering the array and never tell the user that ordering
+  will be honored.
 - An empty `streams` array is permitted in `draft` or `inactive`
   status. Only `status: active` requires non-empty `streams` (see the
   status rules below).
 
 ## `status`
 
+`status` is the only gate on execution — there is no parallel enabled/disabled
+flag. The vocabulary and default are in the `SKILL.md` field table; what each
+value means operationally:
+
 | value | semantics |
 |---|---|
-| `draft` (default) | Editable. Not scheduled. `streams` may be empty. |
+| `draft` | Editable. Not scheduled. `streams` may be empty. |
 | `active` | Scheduled (subject to `schedule.type`). Requires non-empty `streams` AND at least one referenced stream with its own `status: "active"`. |
 | `inactive` | Paused. Not scheduled. `streams` may be empty. |
 

@@ -7,8 +7,8 @@ disable-model-invocation: true
 # endpoint-spec
 
 This skill is loaded by `private-endpoint-creator` when authoring a
-database endpoint document conforming to
-`https://schemas.analitiq.ai/database-endpoint/latest.json`.
+database endpoint document conforming to the published database-endpoint
+contract (`analitiq.contracts.endpoints.DatabaseEndpointDoc`).
 
 ## Required reading (load on demand)
 
@@ -48,14 +48,23 @@ Database endpoints use `scope: connection` and live under
 
 Every authored document must:
 
-1. Declare `$schema: "https://schemas.analitiq.ai/database-endpoint/latest.json"`
-   (the schema marks this as a `const`-required field).
+1. Declare `$schema` with the database-endpoint URL from the table below (the
+   schema marks it a `const`-required field).
 2. Include `endpoint_id`, `database_object`, `columns` (non-empty), and
-   `$schema` — the schema-required top-level fields. `endpoint_id` is the
-   **derived** handle from `scripts/endpoint_id.py`
-   (`slug(schema)__slug(name)[__slug(catalog)]__hash8`), not a hand-authored
-   slug.
+   `$schema` — the top-level fields `DatabaseEndpointDoc` requires.
+   `endpoint_id` is the **derived** handle computed by `scripts/endpoint_id.py`,
+   never a hand-authored slug — see `spec-database-object.md`
+   §Derived `endpoint_id`.
 3. Preserve identifier strings verbatim from introspection.
 4. Pass validation (the `pipeline-schema-validator`, entity `database_endpoint`)
    with zero error findings — the validator recomputes and enforces the derived
    `endpoint_id`.
+
+<!-- BEGIN GENERATED: schema-urls -->
+| Entity | Authored file | `$schema` value |
+|---|---|---|
+| Pipeline | `pipelines/<slug>/pipeline.json` | `https://schemas.analitiq.ai/pipeline/latest.json` |
+| Stream | `pipelines/<slug>/streams/<stream-slug>.json` | `https://schemas.analitiq.ai/stream/latest.json` |
+| Connection | `connections/<slug>/connection.json` | `https://schemas.analitiq.ai/connection/latest.json` |
+| Database endpoint | `connections/<slug>/definition/endpoints/<endpoint_id>.json` | `https://schemas.analitiq.ai/database-endpoint/latest.json` |
+<!-- END GENERATED: schema-urls -->

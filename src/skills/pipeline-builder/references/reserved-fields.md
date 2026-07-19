@@ -22,7 +22,7 @@ field fails validation.
 - `created_at`
 - `updated_at`
 - `schema_hash`
-- `mapping.assignments_hash` (server-computed, `readOnly`; the model rejects a client-authored value)
+- `mapping.assignments_hash` (server-computed; the model does not declare it at all, so a client-authored value is rejected as an unknown field)
 - `source_schema_fingerprint`
 - `target_schema_fingerprint`
 - `source_schema_id`
@@ -64,6 +64,13 @@ required.
 `slug(schema)__slug(name)[__slug(catalog)]__hash8` (still matching
 `^[a-z0-9][a-z0-9_-]*$`) — and is required; it serves as the catalog key after
 the endpoint is materialized. See `endpoint-spec` / `scripts/endpoint_id.py`.
+
+## Reservation is per-namespace
+
+A name reserved on an artifact is reserved **only there**. It does not reserve
+the same name in a provider-owned namespace: a database column may legitimately
+be called `version`, an operation parameter `org_id`. Reserve nothing on the
+provider's behalf — copy discovered names verbatim.
 
 ## Authored shape vs. persisted shape
 

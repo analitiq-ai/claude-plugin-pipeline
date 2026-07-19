@@ -55,6 +55,24 @@ def test_every_doc_block_has_a_renderer():
     )
 
 
+def test_no_malformed_markers():
+    """Every BEGIN/END marker must actually parse as a block.
+
+    A typo'd id, a missing newline after the opening marker, or an unclosed pair
+    makes the region invisible to the regex — the generator would skip it and the
+    in-sync test would pass while the doc silently kept stale hand-typed content.
+    """
+    for path in sorted((G.DOCS_ROOT).rglob("*.md")):
+        text = path.read_text()
+        begins = text.count("<!-- BEGIN GENERATED")
+        ends = text.count("<!-- END GENERATED")
+        parsed = len(G._BLOCK_RE.findall(text))
+        assert begins == ends == parsed, (
+            f"{path.relative_to(ROOT)}: {begins} BEGIN / {ends} END markers but "
+            f"{parsed} parsed block(s) — a marker is malformed and is being skipped"
+        )
+
+
 def test_unknown_block_id_raises():
     text = ("<!-- BEGIN GENERATED: no-such-block -->\n"
             "stale\n"

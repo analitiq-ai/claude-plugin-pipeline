@@ -1,7 +1,22 @@
 # `endpoint_ref` shape
 
 The `source` and every `destinations[]` entry carry an `endpoint_ref`. It is a
-**discriminated union on `scope`** — the two scopes have different shapes:
+**discriminated union on `scope`** (`analitiq.contracts.stream.EndpointRef`) —
+the two scopes have different shapes and different required fields:
+
+- `scope: "connector"` → `analitiq.contracts.stream.ConnectorEndpointRef`
+- `scope: "connection"` → `analitiq.contracts.stream.ConnectionEndpointRef`,
+  whose `database_object` is `analitiq.contracts.stream.DatabaseObject`
+
+Read requiredness off those models rather than off the sketches below.
+
+## Prefer the ref discovery handed you
+
+When endpoint discovery (or a downloaded connector's endpoint set, or a
+`private-endpoint-creator` result) already produced an `endpoint_ref` object,
+submit it **as it stands**. Do not re-derive it, re-case it, drop fields you
+judge redundant, or "tidy" the object shape. A rewritten ref is the single most
+common way a stream stops resolving against the endpoint it was built for.
 
 ## `scope: "connector"` — public connector endpoint (API)
 
@@ -14,9 +29,10 @@ The `source` and every `destinations[]` entry carry an `endpoint_ref`. It is a
 ```
 
 Refers to a public endpoint baked into the connector document (typically API
-endpoints), pinned by the connection's `connector_version` at runtime. All three
-fields are required. `endpoint_id` matches a key under the connector's
-`definition/endpoints/*.json`.
+endpoints), pinned by the connection's `connector_version` at runtime.
+`endpoint_id` matches a key under the connector's `definition/endpoints/*.json`.
+A connector-scope ref carries no snapshot hash — the connector version is the
+pin.
 
 ## `scope: "connection"` — private database endpoint
 
@@ -24,19 +40,43 @@ fields are required. `endpoint_id` matches a key under the connector's
 {
   "scope": "connection",
   "connection_id": "<connection-uuid>",
-  "endpoint_id": "<derived endpoint handle>",
-  "database_object": { "schema": "public", "name": "orders" }
+  "database_object": { "schema": "public", "name": "orders" },
+  "endpoint_id": "<derived endpoint handle>"
 }
 ```
 
 Refers to a private, connection-scoped database endpoint produced by
-introspection. **`database_object` is required** and carries the verbatim
-database-object identity — the same `{catalog?, schema?, name}` recorded on the
-endpoint document (author it from the endpoint doc's `database_object`, i.e. the
-`build_database_object(...)` output, so the two always agree). `endpoint_id` is
-optional in the schema, but **author it** (the derived
-`slug(schema)__slug(table)[__slug(catalog)]__<hash8>` handle) so the
-cross-document bundle check can resolve the reference.
+introspection. **`database_object` is the required member here** — it carries the
+verbatim database-object identity, the same `{catalog?, schema?, name}` recorded
+on the endpoint document (author it from the endpoint doc's `database_object`,
+i.e. the `build_database_object(...)` output, so the two always agree).
+
+`endpoint_id` is optional: omit it and the contract derives it; supply it and the
+contract verifies it against the derivation (`ADV-STRM-003`). Author it when the
+plugin can compute it, so the cross-document bundle check can resolve the
+reference by `(connection_id, endpoint_id)`.
+
+<!-- BEGIN GENERATED: endpoint-id-derivation -->
+A database `endpoint_id` is **derived**, not chosen: it is a deterministic handle over the endpoint's verbatim locator, computed by `analitiq.contracts.endpoint_identity.derive_db_endpoint_id(catalog, schema, name)`.
+
+| `catalog` | `schema` | `name` | derived `endpoint_id` |
+|---|---|---|---|
+| — | `public` | `orders` | `public__orders__371c8422` |
+| `cat` | `Public` | `Orders` | `public__orders__cat__a688ced5` |
+
+Derivation must stay deterministic: a handle that changes for an unchanged resource mints a new endpoint and breaks every stream pinned to the old one. Never hand-write one — call the helper (`src/scripts/endpoint_id.py` wraps it).
+<!-- END GENERATED: endpoint-id-derivation -->
+
+That derived handle is an **Analitiq slug, not a database object name**. It is
+opaque: no consumer may parse schema, table or catalog identity back out of it,
+and the presence of recognizable-looking segments is an artifact of the
+derivation, not an interface. When something needs the database's own identity —
+displaying it, comparing it, driving DDL — read `database_object`, which is why
+the ref carries it.
+
+Database endpoints may be referenced by **either side**: a `scope: "connection"`
+ref is equally valid on a stream's `source` and on a `destinations[]` entry.
+Nothing about a private endpoint restricts it to reading.
 
 `scope: "connection"` is valid only for **database** endpoints. Connection-scoped
 API endpoints await an API-endpoint snapshot-hashing spec; `stream-creator`
@@ -50,7 +90,8 @@ that side — `pipeline.connections.source` for the stream source, and one of
 
 ## Uniqueness
 
-Destination `endpoint_ref`s must be unique within a single stream.
+Destination `endpoint_ref`s must be unique within a single stream — see
+`ADV-STRM-001` in `SKILL.md` § Cross-field rules for the exact tuple.
 
 ## Cross-document consistency
 
