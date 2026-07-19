@@ -31,6 +31,22 @@ document conforming to `https://schemas.analitiq.ai/pipeline/latest.json`.
 - Database endpoint bodies — see `endpoint-spec`.
 - Connector bodies — that's the `analitiq-connector-builder` plugin.
 
+## Cross-field rules the contract enforces
+
+These are the relational constraints no single field can express. The validator
+emits each one's stable id in the finding message, so a failure like
+`[ADV-PIPE-002] …` points straight at the rule below.
+
+<!-- BEGIN GENERATED: advisory-pipeline -->
+| Rule | Constraint |
+|---|---|
+| `ADV-PIPE-001` | connections.destinations must not contain duplicate connection IDs. |
+| `ADV-PIPE-002` | schedule.type gates its fields: manual forbids interval/cron, interval requires interval_minutes, cron requires cron_expression. |
+| `ADV-PIPE-003` | streams must be unique by version-stripped base id. |
+| `ADV-PIPE-004` | An active pipeline must reference at least one stream. |
+| `ADV-RETRY-001` | retry_delay_seconds must be omitted or 0 when max_retries is 0. |
+<!-- END GENERATED: advisory-pipeline -->
+
 ## Output rules
 
 Every authored document must:

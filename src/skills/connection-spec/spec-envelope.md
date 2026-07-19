@@ -70,8 +70,20 @@ The user (or CI) exports these into the environment where the pipeline runs (or
 loads them into their secret store) before submission; the plugin never reads
 `.secrets/`.
 
-A pointer value must match one of the contract's accepted schemes —
-`env:NAME`, `file:PATH`, `sidecar:NAME`, `ssm:/PATH`, `s3://BUCKET/KEY`,
-`arn:aws:secretsmanager:…`, or `arn:aws:ssm:…` (`sidecar:NAME` names an entry in
-the connection's local credentials file). Use `env:` unless the user asks for a
-specific store; substitute their pointer verbatim if so.
+Use `env:` unless the user asks for a specific store; substitute their pointer
+verbatim if so. `sidecar:NAME` names an entry in the connection's local
+credentials file.
+
+<!-- BEGIN GENERATED: secret-ref-grammar -->
+Every `secret_refs` value must carry an explicit scheme — a bare token (a pasted raw secret) is rejected by the contract.
+
+Accepted schemes (`analitiq.contracts.connection.SECRET_REF_VALUE_PATTERN`):
+
+- `env:[A-Za-z_][A-Za-z0-9_]*`
+- `file:[A-Za-z0-9_.][A-Za-z0-9_./\-]*`
+- `s3://[A-Za-z0-9._\-]+/[A-Za-z0-9_./\-]+`
+- `arn:aws:secretsmanager:[A-Za-z0-9\-]+:\d+:secret:[A-Za-z0-9/_\-+=.@]+`
+- `arn:aws:ssm:[A-Za-z0-9\-]+:\d+:parameter/[A-Za-z0-9_./\-]+`
+- `ssm:/[A-Za-z0-9_./\-]+`
+- `sidecar:.+`
+<!-- END GENERATED: secret-ref-grammar -->
