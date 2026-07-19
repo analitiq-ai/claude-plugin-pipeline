@@ -244,12 +244,18 @@ def render_filter_operators() -> str:
     return "\n".join(out) + "\n"
 
 
-# Advisory families this plugin is in the lane of. The rest of the published
-# catalogue (ADV-CTOR/ENDP/TMAP/CONN/HTTP/DSYNC) governs connector documents or
-# server-side run records, which this plugin never authors. Pinned so a family
-# that silently disappears — or a genuinely new in-scope one — is a test failure
-# rather than a rule quietly missing from an agent's instructions.
-IN_SCOPE_ADVISORY_FAMILIES = ("ADV-PIPE-", "ADV-RETRY-", "ADV-STRM-", "ADV-DBEP-")
+# Advisory families this plugin is in the lane of — every one is rendered into
+# the prose by a renderer below.
+IN_SCOPE_ADVISORY_FAMILIES = ("ADV-DBEP-", "ADV-PIPE-", "ADV-RETRY-", "ADV-STRM-")
+
+# Families deliberately NOT rendered: they govern connector / api-endpoint
+# documents or server-side run records, none of which this plugin authors.
+# Recorded rather than merely omitted so the judgment is reviewable, and so a
+# family the contract adds later matches neither list and fails the test that
+# pins these two — forcing a decision instead of a silent omission.
+OUT_OF_SCOPE_ADVISORY_FAMILIES = (
+    "ADV-CONN-", "ADV-CTOR-", "ADV-DSYNC-", "ADV-ENDP-", "ADV-HTTP-", "ADV-TMAP-",
+)
 
 
 def _advisory_block(prefixes: tuple[str, ...]) -> str:
@@ -272,6 +278,11 @@ def _advisory_block(prefixes: tuple[str, ...]) -> str:
 
 def render_advisory_pipeline() -> str:
     return _advisory_block(("ADV-PIPE-", "ADV-RETRY-"))
+
+
+def advisory_families_rendered() -> tuple[str, ...]:
+    """Families the renderers below actually emit, for the scope test to pin."""
+    return ("ADV-PIPE-", "ADV-RETRY-", "ADV-STRM-", "ADV-DBEP-")
 
 
 def render_advisory_stream() -> str:

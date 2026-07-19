@@ -17,11 +17,14 @@ jobs:
         run: pip install -r requirements-dev.txt
       - name: Run tests
         run: pytest
-      # `if: always()` is load-bearing. test_generated_blocks_in_sync computes the
-      # same predicate as --check, so on a stale block pytest fails first; without
-      # this the step would be skipped in exactly the runs it exists to explain.
-      # Running it anyway prints the offending diff, so a contributor sees what to
-      # regenerate without reproducing locally.
+      # The condition is load-bearing. test_generated_blocks_in_sync computes the
+      # same predicate as --check, so on a stale block pytest fails first; under
+      # the default `if: success()` this step would be skipped in exactly the runs
+      # it exists to explain. Running it anyway prints the offending diff, so a
+      # contributor sees what to regenerate without reproducing locally.
+      # `success() || failure()` rather than `always()`: it should not run when the
+      # job was cancelled, nor after a failed install (which would send the
+      # bootstrap off to reinstall the pin and bury the real error).
       - name: Check generated prose blocks match the pinned contract
-        if: always()
+        if: success() || failure()
         run: python3 src/scripts/gen_contract_docs.py --check

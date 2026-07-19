@@ -198,12 +198,15 @@ def test_validator_pin_matches_requirements():
         "does not pin that exact version")
 
     # CLAUDE.md names the pin too, and sits outside the generator's `src/` scope,
-    # so nothing else would notice it going stale.
-    version = VALIDATOR_PIN.split("==", 1)[1]
+    # so nothing else would notice it going stale. Assert its presence FIRST:
+    # a conditional check would silently disable itself the moment someone
+    # reworded the line, which is exactly the drift it exists to catch.
     claude_md = (ROOT / "CLAUDE.md").read_text()
-    if "analitiq-validator==" in claude_md:
-        assert f"analitiq-validator=={version}" in claude_md, (
-            f"CLAUDE.md documents a different validator pin than {VALIDATOR_PIN!r}")
+    assert "analitiq-validator==" in claude_md, (
+        "CLAUDE.md no longer states the validator pin in the `analitiq-validator==X` "
+        "form this test recognises; restore it or update this assertion.")
+    assert VALIDATOR_PIN in claude_md, (
+        f"CLAUDE.md documents a different validator pin than {VALIDATOR_PIN!r}")
 
 
 def test_installed_validator_matches_the_pin():

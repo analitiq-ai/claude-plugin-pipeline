@@ -84,6 +84,10 @@ def test_no_malformed_markers():
     # (`<!-- BEGIN  GENERATED: x -->`), which is the realistic
     # copy-paste-a-broken-template case: all three counts would be 0 and the doc
     # would keep stale hand-typed content forever.
+    # `.*?` may span across an unrelated comment, merging two matches into one.
+    # That is count-neutral for this assertion — a comment without GENERATED
+    # contributes nothing either way — so the arithmetic still holds; the looseness
+    # is what catches a marker mangled inside its own prefix.
     loose = re.compile(r"<!--.*?GENERATED.*?-->", re.IGNORECASE | re.DOTALL)
     for path in sorted(G.DOCS_ROOT.rglob("*.md")):
         text = path.read_text()
@@ -182,3 +186,30 @@ def test_filter_operator_scopes_are_disjoint_and_complete():
         "API-only operators are no longer connector-scope-only")
     assert {"eq", "neq", "in", "not_in"} <= connection & connector, (
         "common operators are no longer accepted in both scopes")
+
+
+def test_advisory_family_scope_is_pinned():
+    """Every published advisory family is a deliberate in- or out-of-scope call.
+
+    The renderers only emit the in-scope families. A family the contract adds
+    later would otherwise render nowhere and fail nothing — the rule would simply
+    be missing from every agent's instructions. Matching neither list fails here
+    instead, forcing a decision.
+    """
+    from analitiq.contracts.shared.advisory import all_rules
+
+    known = set(G.IN_SCOPE_ADVISORY_FAMILIES) | set(G.OUT_OF_SCOPE_ADVISORY_FAMILIES)
+    families = {r.id.rsplit("-", 1)[0] + "-" for r in all_rules()}
+    unclassified = sorted(families - known)
+    assert not unclassified, (
+        f"advisory families classified as neither in- nor out-of-scope: {unclassified}. "
+        "Decide: render them (add to IN_SCOPE_ADVISORY_FAMILIES and a renderer) or "
+        "record why not (OUT_OF_SCOPE_ADVISORY_FAMILIES).")
+    # Both lists must describe reality, not aspiration.
+    assert set(G.IN_SCOPE_ADVISORY_FAMILIES) <= families
+    assert set(G.OUT_OF_SCOPE_ADVISORY_FAMILIES) <= families
+
+
+def test_in_scope_advisory_families_are_all_rendered():
+    """The in-scope list and what the renderers emit must not drift apart."""
+    assert set(G.advisory_families_rendered()) == set(G.IN_SCOPE_ADVISORY_FAMILIES)
