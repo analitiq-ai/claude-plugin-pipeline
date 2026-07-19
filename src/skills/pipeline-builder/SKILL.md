@@ -19,7 +19,8 @@ Pick the mode from the user's intent:
   scratch. Runs the phases below.
 - **edit** — change an already-authored pipeline / stream / connection /
   database-endpoint **in place** (see "Edit mode"). Trigger when the user asks to
-  change, update, add to, or remove from an existing artifact.
+  change, update, add to, or remove from an existing artifact, or to align a
+  stream's endpoint reference to its connector's real endpoint name.
 
 ## Inputs to collect
 
@@ -237,6 +238,18 @@ Do NOT load `pipeline-spec`, `stream-spec`, `connection-spec`, or
     `active`). The validator is single-shot — iteration discipline lives
     here in the orchestrator's prose.
 
+    **`connector-endpoint-ref` warnings.** The bundle validation (run with
+    `bundle_root: .`) may return `connector-endpoint-ref` **warnings** — a
+    `scope: "connector"` stream ref naming an endpoint the downloaded connector
+    does not publish. These do not fail validation, but do not ignore them:
+    surface each one and, when the warning carries a "Did you mean `X`?"
+    suggestion, offer to **align** the stream's `endpoint_ref.endpoint_id` to the
+    connector's real endpoint name. Apply the alignment only on the user's
+    confirmation — it is a surgical edit to that stream (change nothing else),
+    then re-validate. Never edit the connector; only the stream ref moves. If
+    there is no confident suggestion, report the connector's available endpoints
+    and ask the user which one the stream should target.
+
 10. **Drift (optional)** — if `previous_release_path` was supplied,
     invoke `pipeline-drift-classifier`. It surfaces structural changes
     (added/removed streams, changed write mode, mapping target drift)
@@ -278,8 +291,18 @@ and leaves everything else — including `.secrets/` — untouched.
    `database_endpoint`), which catches a stale or broken referenced artifact; plus
    the whole bundle with `bundle_root: .`, which additionally catches a mis-named
    endpoint file whose name no longer matches its `endpoint_id` (the engine locates
-   it by filename stem). Both surface at edit time instead of at engine runtime.
-   Write only once validation is clean.
+   it by filename stem) and any `connector-endpoint-ref` warning (a `scope:
+   "connector"` stream ref whose endpoint the connector does not publish). Both
+   surface at edit time instead of at engine runtime. Write only once validation is
+   clean.
+
+   **Aligning a connector-scoped endpoint ref** is itself an edit intent ("align
+   the endpoint names to the connector", "fix the endpoint reference"): on a
+   `connector-endpoint-ref` warning, retarget the offending stream's
+   `endpoint_ref.endpoint_id` to the connector's real endpoint name (the warning's
+   suggestion, or — if none is confident — a name the user picks from the
+   connector's endpoint set), then re-validate. This is a surgical stream edit;
+   never touch the connector, and change nothing else in the stream.
 5. Report exactly which files changed and which were left untouched.
 
 ## Output

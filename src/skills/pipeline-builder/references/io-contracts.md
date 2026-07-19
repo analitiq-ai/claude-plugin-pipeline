@@ -122,9 +122,12 @@ Each finding is `{validator, severity, path, message}`. `severity ∈ {"error", 
 validation). Validator ids include `contract-model`
 (single-document model validation), the `bundle-*` ids (cross-document referential
 checks, run with `--bundle-root`), `endpoint-id-locator` (the derived
-database-endpoint id gate), and `endpoint-filename` (a connection-scoped endpoint
+database-endpoint id gate), `endpoint-filename` (a connection-scoped endpoint
 file must be named `<endpoint_id>.json`, since the engine locates it by filename
-stem).
+stem), and `connector-endpoint-ref` (a **warning-only**, plugin-local check that a
+`scope: "connector"` stream ref names an endpoint the downloaded connector actually
+publishes; its message carries an alignment suggestion — see
+`stream-spec/spec-endpoint-refs.md`).
 
 ## `DriftVerdict` (output of `pipeline-drift-classifier`)
 

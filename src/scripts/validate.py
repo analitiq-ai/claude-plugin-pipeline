@@ -25,6 +25,18 @@ right one:
     bundle passes ``require_runnable=False`` (a not-yet-runnable draft is not an
     authoring error); an ``active`` pipeline is held to full runnability.
 
+The adapter adds exactly one check of its own, and only because the published
+contract structurally cannot make it: the published bundle validator receives
+connector *identity* only (slugs), never connector endpoint *contents*, so it
+leaves ``scope='connector'`` endpoint refs unresolved by design
+(``analitiq.validator.pipelines``: "out of scope for this check"). This plugin,
+unlike the service, has the downloaded connector endpoint files on disk, so it
+verifies each ``scope='connector'`` stream ref against the connector's on-disk
+endpoint set and emits a ``connector-endpoint-ref`` **warning** (with an alignment
+suggestion) when the referenced endpoint is absent. It never errors — connectors
+are trusted registry artifacts pinned by ``connector_version`` at runtime — and it
+never edits the connector; the orchestrator aligns the stream's ref instead.
+
 Validation is offline — no schema is fetched. Usage::
 
     python3 src/scripts/validate.py --entity pipeline --document path/to/pipeline.json --bundle-root .
@@ -172,6 +184,99 @@ def _assemble_bundle(pipeline_doc: dict, document_path: Path, root: Path) -> tup
     return bundle, findings
 
 
+def _connector_endpoint_sets(root: Path) -> dict[str, set[str]]:
+    """Map each downloaded connector — by directory slug **and** its authored
+    `connector_id` — to the set of endpoint ids it publishes on disk (each
+    `connectors/<slug>/definition/endpoints/*.json` contributes both its filename
+    stem and its `endpoint_id` field, which the connector's own filename gate keeps
+    equal for well-formed registry connectors — this adapter records both to stay
+    correct even if a malformed connector let them diverge).
+
+    A connector whose `definition/endpoints/` directory is absent or empty is
+    **omitted**, not recorded as an empty set: its endpoint set is *unknown* here
+    (the plugin may not have downloaded endpoints for it), and an unknown set must
+    not read as "no endpoints", which would warn on every ref. Callers treat a
+    missing key as "cannot verify — skip"."""
+    sets: dict[str, set[str]] = {}
+    for ep_dir in sorted(root.glob("connectors/*/definition/endpoints")):
+        if not ep_dir.is_dir():
+            continue
+        ids: set[str] = set()
+        for ep_json in sorted(ep_dir.glob("*.json")):
+            ids.add(ep_json.stem)
+            try:
+                eid = _read_json(ep_json).get("endpoint_id")
+            except (OSError, json.JSONDecodeError, UnicodeDecodeError, AttributeError):
+                eid = None
+            if isinstance(eid, str) and eid:
+                ids.add(eid)
+        if not ids:
+            continue
+        slug_dir = ep_dir.parent.parent  # connectors/<slug>
+        keys = {slug_dir.name}
+        try:
+            cid = _read_json(slug_dir / "definition" / "connector.json").get("connector_id")
+        except (OSError, json.JSONDecodeError, UnicodeDecodeError, AttributeError):
+            cid = None
+        if isinstance(cid, str) and cid:
+            keys.add(cid)
+        for key in keys:
+            sets[key] = ids
+    return sets
+
+
+def _check_connector_endpoint_refs(streams, connections,
+                                   connector_endpoint_sets: dict[str, set[str]]) -> list[dict]:
+    """Verify every `scope='connector'` stream endpoint_ref names an endpoint that
+    actually exists in the referenced connector's on-disk endpoint set. Emits a
+    `connector-endpoint-ref` **warning** (never an error) per unresolved ref, with a
+    closest-match alignment suggestion so the orchestrator can retarget the stream to
+    the connector's real endpoint name (it never edits the connector).
+
+    Skipped silently when the endpoint set is unknown (connector not downloaded), so
+    absence never produces a false positive. Reuses the published ref iterator and
+    version-suffix normaliser so ref paths and connection-id matching stay identical
+    to the bundle validator's own resolution."""
+    import difflib
+    from analitiq.validator.pipelines import _base_id, _iter_endpoint_refs
+
+    conn_to_connector: dict = {}
+    for conn in connections if isinstance(connections, list) else []:
+        if not isinstance(conn, dict):
+            continue
+        cid, connector = conn.get("connection_id"), conn.get("connector_id")
+        if isinstance(cid, str) and isinstance(connector, str):
+            conn_to_connector[_base_id(cid)] = connector
+
+    findings: list[dict] = []
+    for path, ref in _iter_endpoint_refs(streams):
+        if ref.get("scope") != "connector":
+            continue
+        cid, eid = ref.get("connection_id"), ref.get("endpoint_id")
+        if not (isinstance(cid, str) and cid and isinstance(eid, str) and eid):
+            continue  # missing ids are contract-model / bundle-connection-ref concerns
+        connector = conn_to_connector.get(_base_id(cid))
+        if connector is None:
+            continue  # unresolved connection — already flagged by the connection check
+        endpoint_ids = connector_endpoint_sets.get(connector)
+        if not endpoint_ids:
+            continue  # endpoint set unknown (connector not downloaded) — cannot verify
+        if eid in endpoint_ids:
+            continue
+        available = sorted(endpoint_ids)
+        case_match = next((e for e in available if e.lower() == eid.lower()), None)
+        close = difflib.get_close_matches(eid, available, n=1, cutoff=0.6)
+        suggestion = case_match or (close[0] if close else None)
+        hint = f" Did you mean {suggestion!r}?" if suggestion else ""
+        findings.append(_finding(
+            "connector-endpoint-ref", "warning", path,
+            f"endpoint_id {eid!r} is not among connector {connector!r}'s published "
+            f"endpoints {available}.{hint} Align the stream's endpoint_ref to the "
+            f"connector's endpoint name; the plugin never edits the connector.",
+        ))
+    return findings
+
+
 def _bundle_findings(pipeline_doc: dict, document_path: Path, root: Path) -> list[dict]:
     from analitiq.validator import validate_pipeline_bundle
     bundle, findings = _assemble_bundle(pipeline_doc, document_path, root)
@@ -181,7 +286,14 @@ def _bundle_findings(pipeline_doc: dict, document_path: Path, root: Path) -> lis
     # (require_runnable=False) while the pipeline is a draft, and enforce runnability
     # once it is authored 'active'. Every referential finding stays blocking either way.
     require_runnable = pipeline_doc.get("status") == "active"
-    return findings + validate_pipeline_bundle(bundle, require_runnable=require_runnable)
+    findings = findings + validate_pipeline_bundle(bundle, require_runnable=require_runnable)
+    # Plugin-local aid the published bundle can't make: it receives connector identity
+    # only, so scope='connector' endpoint refs go unresolved. The plugin has the
+    # downloaded connector endpoint files, so verify those refs here and warn (with an
+    # alignment suggestion) rather than error — connectors are trusted, pinned at runtime.
+    findings += _check_connector_endpoint_refs(
+        bundle["streams"], bundle["connections"], _connector_endpoint_sets(root))
+    return findings
 
 
 def diagnostics_for(entity: str, document_path: Path, bundle_root: Path | None = None) -> dict:
