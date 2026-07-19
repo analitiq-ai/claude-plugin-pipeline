@@ -276,21 +276,32 @@ def _advisory_block(prefixes: tuple[str, ...]) -> str:
     return "\n".join(out) + "\n"
 
 
-def render_advisory_pipeline() -> str:
-    return _advisory_block(("ADV-PIPE-", "ADV-RETRY-"))
+# Which families each advisory block emits. Single-sourced: the renderers read
+# from here and `advisory_families_rendered()` derives its answer from the same
+# map, so the two cannot drift — a second hardcoded tuple would reintroduce
+# exactly the dead-constant defect this map exists to remove.
+_ADVISORY_BLOCK_FAMILIES: dict[str, tuple[str, ...]] = {
+    "advisory-pipeline": ("ADV-PIPE-", "ADV-RETRY-"),
+    "advisory-stream": ("ADV-STRM-",),
+    "advisory-endpoint": ("ADV-DBEP-",),
+}
 
 
 def advisory_families_rendered() -> tuple[str, ...]:
-    """Families the renderers below actually emit, for the scope test to pin."""
-    return ("ADV-PIPE-", "ADV-RETRY-", "ADV-STRM-", "ADV-DBEP-")
+    """Every family the advisory renderers actually emit, derived not restated."""
+    return tuple(sorted({f for fams in _ADVISORY_BLOCK_FAMILIES.values() for f in fams}))
+
+
+def render_advisory_pipeline() -> str:
+    return _advisory_block(_ADVISORY_BLOCK_FAMILIES["advisory-pipeline"])
 
 
 def render_advisory_stream() -> str:
-    return _advisory_block(("ADV-STRM-",))
+    return _advisory_block(_ADVISORY_BLOCK_FAMILIES["advisory-stream"])
 
 
 def render_advisory_endpoint() -> str:
-    return _advisory_block(("ADV-DBEP-",))
+    return _advisory_block(_ADVISORY_BLOCK_FAMILIES["advisory-endpoint"])
 
 
 def render_validator_ids() -> str:
