@@ -1,0 +1,24 @@
+name: tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install the pinned published contract packages
+        run: pip install -r requirements-dev.txt
+      - name: Run tests
+        run: pytest
+      # The suite already gates this via test_generated_blocks_in_sync; running
+      # the generator's own --check surfaces the offending diff directly in the
+      # log, so a contributor sees what to regenerate without reproducing locally.
+      - name: Check generated prose blocks match the pinned contract
+        run: python3 src/scripts/gen_contract_docs.py --check

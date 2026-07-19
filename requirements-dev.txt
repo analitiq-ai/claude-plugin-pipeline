@@ -1,4 +1,9 @@
 # Published Analitiq packages the validator adapter (src/scripts/validate.py) consumes.
 # Exact pre-release pin — keep in lockstep with VALIDATOR_PIN in src/scripts/_analitiq.py.
-# Installs analitiq-contract-models transitively.
+# Installs analitiq-contract-models transitively. The exact `==` pin resolves the
+# pre-release without needing `--pre`.
 analitiq-validator==1.0.0rc10
+
+# Test runner. The documented workflow is `pip install -r requirements-dev.txt && pytest`,
+# so it belongs here rather than being assumed present on the machine.
+pytest
