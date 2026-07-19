@@ -9,7 +9,7 @@ A non-empty array of:
 |---|---|---|---|---|
 | `name` | **yes** | string | — | `minLength=1` |
 | `native_type` | **yes** | string | — | `minLength=1` |
-| `arrow_type` | **yes** | string | — | `pattern=^(?:Null\|Boolean\|Int8\|Int16\|Int32\|Int64\|UInt8\|UInt16\|UInt32\|UInt64\|Float16\|Float32\|Float64\|Utf8\|LargeUtf8\|Binary\|LargeBinary\|Date32\|Date64\|FixedSizeBinary\([1-9][0-9]*\)\|Time32\((?:SECOND\|MILLISECOND)\)\|Time64\((?:MICROSECOND\|NANOSECOND)\)\|Timestamp\((?:SECOND\|MILLISECOND\|MICROSECOND\|NANOSECOND)(?:\s*,\s*(?:null\|[A-Za-z_][A-Za-z0-9_/\-]*\|Etc/GMT[+\-][0-9]{1,2}\|[+\-](?:0[0-9]\|1[0-4]):[0-5][0-9]))?\)\|Duration\((?:SECOND\|MILLISECOND\|MICROSECOND\|NANOSECOND)\)\|Interval\((?:YEAR_MONTH\|DAY_TIME\|MONTH_DAY_NANO)\)\|Decimal128\((?:[1-9]\|[12][0-9]\|3[0-8])\s*,\s*-?[0-9]+\)\|Decimal256\((?:[1-9]\|[1-6][0-9]\|7[0-6])\s*,\s*-?[0-9]+\)\|List<.+>\|LargeList<.+>\|FixedSizeList<.+>\[[1-9][0-9]*\]\|Struct<.+>\|Map<.+,\s*.+>\|SparseUnion<.+>\|DenseUnion<.+>\|Dictionary<.+,\s*.+>\|RunEndEncoded<.+,\s*.+>\|Object\|List\|Json)$` |
+| `arrow_type` | **yes** | string | — | `pattern=(long; see `endpoint-spec/spec-columns.md`)` |
 | `nullable` | no | boolean \| null | `None` | — |
 | `default` | no | any \| null | `None` | — |
 | `comment` | no | string \| null | `None` | — |

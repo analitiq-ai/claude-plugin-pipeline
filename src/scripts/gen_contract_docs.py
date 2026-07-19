@@ -427,6 +427,12 @@ def _type_summary(schema: dict) -> str:
         "emits a construct this generator does not handle")
 
 
+# A pattern longer than this is a vocabulary, not a constraint, and inlining it
+# makes the row unreadable. The Arrow type pattern is ~900 chars and already has
+# its own generated block, so the cell points there instead of repeating it.
+_MAX_INLINE_PATTERN = 80
+
+
 def _constraint_summary(schema: dict) -> str:
     schema, _ = _unwrap_nullable(schema)
     parts = []
@@ -434,7 +440,16 @@ def _constraint_summary(schema: dict) -> str:
         if key in ("const", "enum"):  # already surfaced by the type cell
             continue
         if key in schema:
-            parts.append(f"{label}={schema[key]}")
+            value = schema[key]
+            # Elide rather than truncate: a half-shown regex is one an agent
+            # might copy, which is worse than not showing it at all.
+            if key == "pattern" and len(str(value)) > _MAX_INLINE_PATTERN:
+                # Name the source rather than a location: this block is embedded
+                # in more than one file, and only some of them carry the
+                # arrow-types block that spells the vocabulary out.
+                parts.append(f"{label}=(long; see `endpoint-spec/spec-columns.md`)")
+                continue
+            parts.append(f"{label}={value}")
     items = schema.get("items")
     if isinstance(items, dict):
         for key, label in (("pattern", "item pattern"), ("minLength", "item minLength")):
