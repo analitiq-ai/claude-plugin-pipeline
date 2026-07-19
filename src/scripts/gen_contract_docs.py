@@ -238,6 +238,176 @@ def render_validator_ids() -> str:
     return "\n".join(out) + "\n"
 
 
+def render_endpoint_id_derivation() -> str:
+    """The derived database-endpoint handle, shown by calling the published helper.
+
+    Local prose stated this formula by hand in eight places and had already
+    drifted (one site wrote `slug(table)` where the rest wrote `slug(name)`).
+    A worked example computed by the package settles it.
+    """
+    from analitiq.contracts.endpoint_identity import derive_db_endpoint_id
+
+    cases = [
+        ("public", "orders", None),
+        ("Public", "Orders", "cat"),
+    ]
+    out = [
+        "A database `endpoint_id` is **derived**, not chosen: it is a deterministic "
+        "handle over the endpoint's verbatim locator, computed by "
+        "`analitiq.contracts.endpoint_identity.derive_db_endpoint_id(catalog, schema, name)`.",
+        "",
+        "| `catalog` | `schema` | `name` | derived `endpoint_id` |",
+        "|---|---|---|---|",
+    ]
+    for schema, name, catalog in cases:
+        derived = derive_db_endpoint_id(catalog, schema, name)
+        out.append(f"| {_code(catalog) if catalog else '—'} | {_code(schema)} | "
+                   f"{_code(name)} | {_code(derived)} |")
+    out += [
+        "",
+        "Derivation must stay deterministic: a handle that changes for an unchanged "
+        "resource mints a new endpoint and breaks every stream pinned to the old one. "
+        "Never hand-write one — call the helper (`src/scripts/endpoint_id.py` wraps it).",
+    ]
+    return "\n".join(out) + "\n"
+
+
+# --- G2: entity field tables, rendered from the published models ---------------
+
+# Block id -> (module path, model class). Each entry emits one field table.
+FIELD_TABLE_MODELS = {
+    "fields-pipeline": ("analitiq.contracts.pipelines.config", "PipelineInput"),
+    "fields-stream": ("analitiq.contracts.stream", "StreamInput"),
+    "fields-connection": ("analitiq.contracts.connection", "ConnectionInput"),
+    "fields-schedule": ("analitiq.contracts.pipelines.config", "Schedule"),
+    "fields-engine": ("analitiq.contracts.pipelines.config", "Engine"),
+    "fields-runtime": ("analitiq.contracts.pipelines.config", "Runtime"),
+    "fields-batching": ("analitiq.contracts.pipelines.config", "Batching"),
+    "fields-logging": ("analitiq.contracts.pipelines.config", "Logging"),
+    "fields-error-handling": ("analitiq.contracts.pipelines.config", "ErrorHandling"),
+    "fields-pipeline-connections": ("analitiq.contracts.pipelines.config", "PipelineConnections"),
+}
+
+_CONSTRAINT_KEYS = (
+    ("pattern", "pattern"), ("minLength", "minLength"), ("maxLength", "maxLength"),
+    ("minimum", "min"), ("maximum", "max"), ("exclusiveMinimum", "exclusiveMin"),
+    ("minItems", "minItems"), ("maxItems", "maxItems"), ("uniqueItems", "uniqueItems"),
+    ("const", "const"), ("enum", "enum"),
+)
+
+
+def _unwrap_nullable(schema: dict) -> tuple[dict, bool]:
+    """Collapse the `anyOf: [X, null]` optional wrapper the models emit."""
+    options = schema.get("anyOf")
+    if not options:
+        return schema, False
+    non_null = [o for o in options if o.get("type") != "null"]
+    if len(non_null) == len(options):
+        return schema, False
+    return (non_null[0] if len(non_null) == 1 else {"anyOf": non_null}), True
+
+
+def _type_summary(schema: dict) -> str:
+    """One-cell description of a property's type, following $ref by name only."""
+    schema, _ = _unwrap_nullable(schema)
+    if "$ref" in schema:
+        return schema["$ref"].rsplit("/", 1)[-1]
+    if "const" in schema:
+        return f"const {schema['const']!r}"
+    if "enum" in schema:
+        return " | ".join(repr(v) for v in schema["enum"])
+    if "anyOf" in schema:
+        return " | ".join(_type_summary(o) for o in schema["anyOf"])
+    kind = schema.get("type")
+    if kind == "array":
+        return f"array of {_type_summary(schema.get('items', {}))}"
+    if kind == "object" and "additionalProperties" in schema:
+        extra = schema["additionalProperties"]
+        if isinstance(extra, dict) and extra:
+            return f"map of {_type_summary(extra)}"
+        return "object"
+    return kind or "any"
+
+
+def _constraint_summary(schema: dict) -> str:
+    schema, _ = _unwrap_nullable(schema)
+    parts = []
+    for key, label in _CONSTRAINT_KEYS:
+        if key in ("const", "enum"):  # already surfaced by the type cell
+            continue
+        if key in schema:
+            parts.append(f"{label}={schema[key]}")
+    items = schema.get("items")
+    if isinstance(items, dict):
+        for key, label in (("pattern", "item pattern"), ("minLength", "item minLength")):
+            if key in items:
+                parts.append(f"{label}={items[key]}")
+    return ", ".join(f"`{p}`" for p in parts) if parts else "—"
+
+
+def _render_field_table(module_path: str, class_name: str) -> str:
+    import importlib
+
+    model = getattr(importlib.import_module(module_path), class_name)
+    schema = model.model_json_schema()
+    required = set(schema.get("required", ()))
+    properties = schema.get("properties", {})
+    if not properties:
+        raise RuntimeError(f"{class_name} exposed no properties")
+
+    out = [
+        f"`{module_path}.{class_name}` — "
+        f"{'closed (`additionalProperties: false`)' if schema.get('additionalProperties') is False else 'open'}"
+        f"; required: "
+        + (", ".join(f"`{r}`" for r in sorted(required)) if required else "none"),
+        "",
+        "| Field | Required | Type | Default | Constraints |",
+        "|---|---|---|---|---|",
+    ]
+    for name, prop in properties.items():
+        _, nullable = _unwrap_nullable(prop)
+        default = prop.get("default", "—")
+        default_cell = "—" if default == "—" else _code(repr(default))
+        out.append(
+            f"| {_code(name)} | {'**yes**' if name in required else 'no'} "
+            f"| {_md_escape(_type_summary(prop) + (' | null' if nullable else ''))} "
+            f"| {default_cell} | {_constraint_summary(prop)} |"
+        )
+    if schema.get("allOf"):
+        out += ["", f"Carries {len(schema['allOf'])} declarative cross-field "
+                    "`if`/`then` rule(s) — see the advisory rules for their prose."]
+    return "\n".join(out) + "\n"
+
+
+# --- G3: closed-enum vocabulary ------------------------------------------------
+
+def render_enum_vocabulary() -> str:
+    """Every closed vocabulary an author picks a value from, with its import path."""
+    import importlib
+    from typing import get_args
+
+    targets = [
+        ("`pipeline.status` / `stream.status`", "analitiq.contracts.pipelines.config", "PipelineInput", "status"),
+        ("`pipeline.schedule.type`", "analitiq.contracts.pipelines.config", "Schedule", "type"),
+        ("`pipeline.runtime.logging.log_level`", "analitiq.contracts.pipelines.config", "Logging", "log_level"),
+        ("`error_handling.strategy`", "analitiq.contracts.pipelines.config", "ErrorHandling", "strategy"),
+        ("`stream…filters[].operator`", "analitiq.contracts.stream", "Filter", "operator"),
+        ("`stream…validate.rules[].type`", "analitiq.contracts.stream", "ValidationRule", "type"),
+    ]
+    out = ["| Field | Members | Published as |", "|---|---|---|"]
+    for label, module_path, class_name, field in targets:
+        model = getattr(importlib.import_module(module_path), class_name)
+        annotation = model.model_fields[field].annotation
+        members = [a for a in get_args(annotation) if a is not None and not isinstance(a, type)]
+        if not members:
+            raise RuntimeError(f"{class_name}.{field} exposed no Literal members")
+        out.append(
+            f"| {label} | {', '.join(f'`{m}`' for m in members)} "
+            f"| `{module_path}.{class_name}.{field}` |"
+        )
+    return "\n".join(out) + "\n"
+
+
 RENDERERS = {
     "schema-urls": render_schema_urls,
     "shared-vocabulary": render_shared_vocabulary,
@@ -246,6 +416,12 @@ RENDERERS = {
     "advisory-pipeline": render_advisory_pipeline,
     "advisory-stream": render_advisory_stream,
     "validator-ids": render_validator_ids,
+    "endpoint-id-derivation": render_endpoint_id_derivation,
+    "enum-vocabulary": render_enum_vocabulary,
+    **{
+        block_id: (lambda m=module, c=cls: _render_field_table(m, c))
+        for block_id, (module, cls) in FIELD_TABLE_MODELS.items()
+    },
 }
 
 
