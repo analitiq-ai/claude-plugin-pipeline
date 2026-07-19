@@ -75,7 +75,8 @@ stitches in `stream_id` UUIDs in phase 8.
 - For `schedule.type=interval`: require `interval_minutes`; omit
   `cron_expression`.
 - For `schedule.type=cron`: require `cron_expression` matching
-  `^cron\(.+\)$`; omit `interval_minutes`.
+  the contract's cron pattern; omit `interval_minutes`. See
+  `pipeline-spec/spec-schedule.md` for the generated shape.
 - Default to `{type: "manual", timezone: "UTC"}` when no schedule
   facts are supplied.
 - Use the engine / runtime defaults from the published schema unless

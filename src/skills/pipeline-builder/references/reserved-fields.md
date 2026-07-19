@@ -60,10 +60,10 @@ required.
 - `connection_id`
 - `schema_hash`
 
-`endpoint_id` is **authored** — the derived handle
-`slug(schema)__slug(name)[__slug(catalog)]__hash8` (still matching
-`^[a-z0-9][a-z0-9_-]*$`) — and is required; it serves as the catalog key after
-the endpoint is materialized. See `endpoint-spec` / `scripts/endpoint_id.py`.
+`endpoint_id` is **authored** — the derived handle, computed by
+`scripts/endpoint_id.py` and never hand-written — and is required; it serves as
+the catalog key after the endpoint is materialized. See
+`endpoint-spec/spec-database-object.md`.
 
 ## Reservation is per-namespace
 

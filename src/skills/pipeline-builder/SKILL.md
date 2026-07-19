@@ -334,7 +334,8 @@ Report to the user:
   enforce this; pass `bundle_root: .` when validating the stitched
   pipeline.
 - Authored documents declare `$schema` with the published host
-  (`https://schemas.analitiq.ai/...`). Validation is offline and
+  (the per-entity URLs are tabulated in `references/schema-hosts.md`).
+  Validation is offline and
   model-driven — no schema is fetched. See `references/schema-hosts.md`.
 - The published schemas are **closed** (`additionalProperties: false`).
   Do not author unknown fields, including `x-*` extension keys.

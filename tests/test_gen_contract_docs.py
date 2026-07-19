@@ -73,6 +73,34 @@ def test_no_malformed_markers():
         )
 
 
+def test_every_schema_url_in_prose_is_published():
+    """No doc may name a schema URL the package does not publish.
+
+    Some `$schema` mentions live in imperative prose ("Declare `$schema`: …")
+    where a generated block does not fit. They are still a drift surface, so this
+    pins them: every schemas.analitiq.ai URL appearing anywhere under src/ must be
+    one the pinned package actually emits.
+    """
+    import re
+
+    from analitiq.contracts.shared.common import schema_url_for
+
+    published = {
+        schema_url_for(resource)
+        for resource in ("pipeline", "stream", "connection", "database-endpoint",
+                         "api-endpoint", "connector", "credentials")
+    }
+    url_re = re.compile(r"https://schemas\.analitiq\.ai/[A-Za-z0-9._/-]+")
+    offenders = {}
+    for path in sorted(G.DOCS_ROOT.rglob("*")):
+        if not path.is_file() or path.suffix not in {".md", ".json", ".py"}:
+            continue
+        for url in url_re.findall(path.read_text()):
+            if url.rstrip(".,;:)") not in published:
+                offenders.setdefault(path.relative_to(ROOT).as_posix(), set()).add(url)
+    assert not offenders, f"unpublished schema URLs referenced in prose: {offenders}"
+
+
 def test_unknown_block_id_raises():
     text = ("<!-- BEGIN GENERATED: no-such-block -->\n"
             "stale\n"
