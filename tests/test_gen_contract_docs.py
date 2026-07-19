@@ -213,3 +213,19 @@ def test_advisory_family_scope_is_pinned():
 def test_in_scope_advisory_families_are_all_rendered():
     """The in-scope list and what the renderers emit must not drift apart."""
     assert set(G.advisory_families_rendered()) == set(G.IN_SCOPE_ADVISORY_FAMILIES)
+
+
+def test_advisory_map_keys_are_real_renderer_blocks():
+    """Each advisory family must be claimed by a block that actually reaches a doc.
+
+    Closes the loop the other two advisory tests leave open. Without this, the
+    path of least resistance for a future maintainer is: contract adds a family ->
+    scope test fails -> add it to IN_SCOPE -> rendered test fails -> add a map
+    entry -> green, with the rule rendering nowhere. Keying the map to RENDERERS
+    means test_every_renderer_is_referenced_by_a_doc carries it the rest of the
+    way to an actual document.
+    """
+    orphans = sorted(set(G._ADVISORY_BLOCK_FAMILIES) - set(G.RENDERERS))
+    assert not orphans, (
+        f"advisory map claims block ids with no renderer: {orphans}; "
+        "their families would count as rendered while reaching no agent")
