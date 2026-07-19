@@ -27,7 +27,10 @@ and you do not author anything.
 2. **Download the connector as a unit, and verify it before trusting it.**
    The registry hosts each connector as its own repository under the
    `analitiq-dip-registry` GitHub org, named after the connector slug (its
-   `connector_id`). A connector's endpoints (and its type-maps / manifest)
+   `connector_id`). That slug is one identity wearing three hats — the
+   connector's canonical identifier, its registry repository name, and its
+   on-disk directory name — and it is **immutable**. A renamed connector is a
+   different connector, never an in-place update of this one. A connector's endpoints (and its type-maps / manifest)
    are published **alongside** `connector.json` under `definition/`, so
    download that directory **wholesale** — do not enumerate endpoints from
    a manifest and do not walk the repo file-by-file. Fetch the repo's

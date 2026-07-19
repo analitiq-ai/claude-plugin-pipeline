@@ -87,7 +87,7 @@ The agent has three modes; one invocation runs exactly one mode.
    ```jsonc
    {
      "$schema": "https://schemas.analitiq.ai/database-endpoint/latest.json",
-     "endpoint_id": "<from endpoint_id.py — slug(schema)__slug(name)[__slug(catalog)]__hash8>",
+     "endpoint_id": "<computed by endpoint_id.py — never hand-written>",
      "display_name": "<schema>.<name>",
      "database_object": { /* from endpoint_id.py — verbatim identifiers + object_type */ },
      "columns": [ /* per spec-columns.md */ ],

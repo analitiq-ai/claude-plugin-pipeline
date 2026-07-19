@@ -38,8 +38,8 @@ own required sub-shape.
     "type": "manual",                           // "manual" | "interval" | "cron"
     "timezone": "UTC"                           // IANA name; default UTC
   },
-  "engine_overrides": null,                     // EngineConfig sub-shape or null
-  "runtime_overrides": null                     // RuntimeConfig sub-shape or null
+  "engine_overrides": null,                     // pipeline `engine` sub-shape or null
+  "runtime_overrides": null                     // pipeline `runtime` sub-shape or null
 }
 ```
 
@@ -119,15 +119,26 @@ the creator returns:
 
 Each finding is `{validator, severity, path, message}`. `severity ∈ {"error", "warning"}`;
 `passed` is `true` iff no `error` finding exists (a `warning` does not fail
-validation). Validator ids include `contract-model`
-(single-document model validation), the `bundle-*` ids (cross-document referential
-checks, run with `--bundle-root`), `endpoint-id-locator` (the derived
-database-endpoint id gate), `endpoint-filename` (a connection-scoped endpoint
-file must be named `<endpoint_id>.json`, since the engine locates it by filename
-stem), and `connector-endpoint-ref` (a **warning-only**, plugin-local check that a
-`scope: "connector"` stream ref names an endpoint the downloaded connector actually
-publishes; its message carries an alignment suggestion — see
-`stream-spec/spec-endpoint-refs.md`).
+validation).
+
+<!-- BEGIN GENERATED: validator-ids -->
+Validator ids the published package can emit:
+
+`bundle-connection-ref`, `bundle-connector-ref`, `bundle-endpoint-ref`, `bundle-pipeline`, `bundle-stream-ref`, `contract-model`, `document`, `embedded-json-schema`, `endpoint-filename`, `endpoint-id-locator`, `endpoint-id-unique`, `type-map-coverage`, `type-map-rule`, `type-map-write-coverage`
+<!-- END GENERATED: validator-ids -->
+
+The `bundle-*` ids only appear when the validator runs with `--bundle-root`.
+
+The adapter adds one id of its own, `connector-endpoint-ref` — a **warning-only**
+check the published bundle validator structurally cannot make, since it receives
+connector identity and never connector endpoint contents. It checks that a
+`scope: "connector"` stream ref names an endpoint the downloaded connector
+actually publishes, and its message carries an alignment suggestion. See
+`stream-spec/spec-endpoint-refs.md`.
+
+A finding raised by a cross-field (relational) rule carries that rule's stable id
+inline in its `message`, as `[ADV-<AREA>-NNN] …`. Quote the id when relaying a
+failure — `pipeline-spec` and `stream-spec` list those rules by id.
 
 ## `DriftVerdict` (output of `pipeline-drift-classifier`)
 

@@ -1,0 +1,33 @@
+name: tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install the pinned published contract packages
+        run: pip install -r requirements-dev.txt
+      - name: Run tests
+        id: tests
+        run: pytest
+      # The condition is load-bearing. test_generated_blocks_in_sync computes the
+      # same predicate as --check, so on a stale block pytest fails first; under
+      # the default `if: success()` this step would be skipped in exactly the runs
+      # it exists to explain. Running it anyway prints the offending diff, so a
+      # contributor sees what to regenerate without reproducing locally.
+      #
+      # Gated on the tests step specifically, NOT `always()` or `success() ||
+      # failure()`: both of those also fire when the install step failed, and this
+      # script re-enters the dependency bootstrap, which would reinstall the pin
+      # and bury the real error under a second, noisier failure.
+      - name: Check generated prose blocks match the pinned contract
+        if: success() || steps.tests.conclusion == 'failure'
+        run: python3 src/scripts/gen_contract_docs.py --check

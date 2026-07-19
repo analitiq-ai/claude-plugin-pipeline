@@ -62,18 +62,45 @@ Authored documents declare `$schema` with the `schemas.analitiq.ai` host — the
 The plugin does not ship a validator — it consumes the published, offline `analitiq-validator` + `analitiq-contract-models` packages through a thin adapter, `src/scripts/validate.py`, which normalizes every result into one `Diagnostics` JSON object (`{passed, findings[]}`). Dispatch per entity:
 
 - `database_endpoint` → `analitiq.validator.validate_document` (contract model + the derived-`endpoint_id` gate + column checks).
-- `connection` / `stream` / `pipeline` → the matching `*Input` Pydantic model (`ConnectionInput` / `StreamInput` / `PipelineInput`) — the source of truth the published JSON Schemas render from.
+- `connection` / `stream` / `pipeline` → the matching `*Input` Pydantic model (`ConnectionInput` / `StreamInput` / `PipelineInput`) — the source of truth the published JSON Schemas render from. `validate_document` reaches the same models, but selects them by document *shape*; a document missing its discriminating key would collapse into one generic "unrecognized artifact" finding, so the adapter routes by the known `--entity` to keep per-field diagnostics.
 - `pipeline` with `--bundle-root` → additionally `analitiq.validator.validate_pipeline_bundle` for cross-document referential integrity (stream↔pipeline parentage, connection role wiring, endpoint-ref resolution). A draft pipeline is not yet runnable by design, so the adapter passes `require_runnable=False` for drafts (no not-runnable finding is produced); runnability is enforced only once the pipeline is `active`.
 
 The adapter adds one check of its own on top of the published bundle, and only because the published contract structurally cannot make it. `validate_pipeline_bundle` receives connector **identity** only (slugs), never connector endpoint **contents**, so it leaves `scope: "connector"` endpoint refs unresolved by design. This plugin has the downloaded connector endpoint files on disk, so with `--bundle-root` it verifies each `scope: "connector"` stream ref against the connector's on-disk endpoint set (`connectors/<slug>/definition/endpoints/*.json`) and emits a **warning-only** `connector-endpoint-ref` finding — with a closest-match alignment suggestion — when the referenced endpoint is absent. It never errors (connectors are trusted registry artifacts, pinned by `connector_version` at runtime) and never edits the connector; the orchestrator aligns the stream's `endpoint_ref` instead, only on the user's confirmation.
 
-The adapter self-installs the pinned validator (`analitiq-validator==1.0.0rc6`, see `requirements-dev.txt` / `src/scripts/_analitiq.py`) into a managed virtualenv on first use and is offline thereafter. `src/scripts/endpoint_id.py` reuses the same package to compute the derived database-endpoint identity. Run directly:
+The adapter self-installs the pinned validator (`analitiq-validator==1.0.0rc10`, see `requirements-dev.txt` / `src/scripts/_analitiq.py`) into a managed virtualenv on first use and is offline thereafter. `src/scripts/endpoint_id.py` reuses the same package to compute the derived database-endpoint identity. Run directly:
 
 ```bash
 python3 src/scripts/validate.py --entity pipeline --document path/to/pipeline.json --bundle-root path/to/project
 ```
 
 Output is a single `Diagnostics` JSON object. Exit `0` iff `passed: true`. Tests live under `tests/`; run with `pip install -r requirements-dev.txt && pytest`.
+
+## Prose vs. Contract
+
+The published contract — not prose — defines the schema. Analitiq keeps its normative prose **only in this plugin**, so agents have something to read; the infra repo's `docs/schema-contracts/` is being retired in favour of the contracts, schemas, and Pydantic validations shipped in the published packages.
+
+That makes duplication the failure mode to avoid: a fact restated by hand in prose is a fact that can drift from the contract it claims to describe. So facts the package already states are **generated into** the prose, never typed into it:
+
+```bash
+python3 src/scripts/gen_contract_docs.py            # rewrite generated blocks in place
+python3 src/scripts/gen_contract_docs.py --check    # CI gate: fail if any block is stale
+```
+
+`src/scripts/gen_contract_docs.py` reads the pinned package and renders each block into a marked region:
+
+```markdown
+<!-- BEGIN GENERATED: filter-operators -->
+…rendered from analitiq.contracts…
+<!-- END GENERATED: filter-operators -->
+```
+
+Rules for anyone editing `src/` prose:
+
+- **Never hand-edit inside a marker pair** — the generator overwrites it and CI fails.
+- Everything outside the markers is hand-written **judgment**: when to apply a rule, what to ask the user, what the plugin refuses to do. The package cannot express that, so it stays prose.
+- A block id with no renderer is an error, not a no-op — `UnknownBlock` fails loud.
+- Bumping the validator pin means re-running the generator; `test_generated_blocks_in_sync` is the gate.
+- Cross-field ("advisory") rules carry stable `ADV-<AREA>-NNN` ids that rc10 emits inline in finding messages. Prose cites the id and quotes the published rule text verbatim, so a finding points straight at a rule the agent has already read.
 
 ## File Output
 

@@ -95,9 +95,11 @@ The orchestrator passes:
   `.secrets/credentials.json` entry.
 - Never author the `discovered` map — the auto-discovery pipeline owns it and the
   connections API rejects a client-supplied value.
-- `secret_refs` pointer values must match an accepted scheme (`env:`, `file:`,
-  `sidecar:`, `ssm:/`, `s3://`, `arn:aws:secretsmanager:`, `arn:aws:ssm:`).
-  Default to `env:`.
+- `secret_refs` pointer values must match one of the schemes the contract
+  accepts — the authoritative grammar is
+  `analitiq.contracts.connection.SECRET_REF_VALUE_PATTERN`, listed in
+  `connection-spec/spec-envelope.md`. Default to `env:`. A bare token with no
+  scheme is rejected, which is what stops a pasted secret landing here.
 - Routing is by the contract's `storage`, not by `auth.type` — this holds for
   every connector and auth type, so it needs no change when a new connector
   ships. If the connector has no `connection_contract`, return a structured
