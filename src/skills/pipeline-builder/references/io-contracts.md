@@ -38,8 +38,8 @@ own required sub-shape.
     "type": "manual",                           // "manual" | "interval" | "cron"
     "timezone": "UTC"                           // IANA name; default UTC
   },
-  "engine_overrides": null,                     // EngineConfig sub-shape or null
-  "runtime_overrides": null                     // RuntimeConfig sub-shape or null
+  "engine_overrides": null,                     // pipeline `engine` sub-shape or null
+  "runtime_overrides": null                     // pipeline `runtime` sub-shape or null
 }
 ```
 

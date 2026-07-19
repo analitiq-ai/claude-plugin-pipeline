@@ -8,17 +8,22 @@ against) and normalizes every backend into one Diagnostics envelope:
 
     {"passed": bool, "findings": [{"validator", "severity", "path", "message"}]}
 
-The published package deliberately exposes three different entry points, because
-one artifact kind is not like the others. This adapter routes each entity to the
-right one:
+The published package exposes one single-document entry point plus one bundle
+entry point. This adapter routes each entity as follows:
 
   * ``database_endpoint`` -> ``analitiq.validator.validate_document`` — the model
     plus the derived-``endpoint_id`` gate and column checks (the same code the
     ``analitiq-validate`` CLI runs).
   * ``connection`` / ``stream`` / ``pipeline`` -> the matching ``*Input`` Pydantic
     model's ``.model_validate`` (the source of truth the published JSON Schemas are
-    rendered from). We route by the caller-supplied ``--entity`` rather than the
-    validator's shape detection, since the entity kind is already known here.
+    rendered from). ``validate_document`` would reach the same models, but it
+    selects them by *document shape*: its detectors key off ``connector_id``,
+    ``destinations`` and ``connections`` respectively. An authored document that
+    omits its discriminating key — precisely the broken input this adapter exists
+    to diagnose — would match no detector and collapse into a single generic
+    "unrecognized artifact" finding. Routing by the caller-supplied ``--entity``,
+    which is already known here, guarantees the right model runs and yields
+    per-field findings instead.
   * ``pipeline`` with ``--bundle-root`` -> additionally
     ``analitiq.validator.validate_pipeline_bundle`` over the on-disk bundle, for the
     cross-document referential integrity no single document can verify. A draft

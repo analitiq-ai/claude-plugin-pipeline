@@ -46,7 +46,7 @@ The orchestrator must halt (and surface a clear message) when:
   file themselves.
 - Phase 4's reuse-validation of an existing `connection.json` against
   `connection/latest.json` fails. The orchestrator surfaces the
-  validator's findings (`path`, `message`, `rule_doc`) verbatim and
+  validator's findings (`validator`, `path`, `message`) verbatim and
   asks the user to fix or remove the existing file. The orchestrator
   does not overwrite user-owned connection files (including
   `.secrets/`).
@@ -57,7 +57,7 @@ The orchestrator must halt (and surface a clear message) when:
   and waits for the user to fix it.
 - Phase 5's reuse-validation of an existing endpoint file against
   `database-endpoint/latest.json` fails. The orchestrator surfaces
-  the validator's findings (`path`, `message`, `rule_doc`) verbatim
+  the validator's findings (`validator`, `path`, `message`) verbatim
   and asks the user to fix or remove the file; introspection is not
   rerun against a half-broken file.
 - Phase 9 still has `error`-severity findings after 5 fix passes.
