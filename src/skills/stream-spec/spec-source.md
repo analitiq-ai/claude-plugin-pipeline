@@ -1,11 +1,23 @@
 # `source` block
 
-The accepted shape is `analitiq.contracts.stream.StreamSource` — with
-`analitiq.contracts.stream.{FullRefreshReplication, IncrementalReplication}` for
-`replication` and `analitiq.contracts.stream.{OffsetDatabasePagination,
-KeysetDatabasePagination}` for `database_pagination`. Read the required-field and
-default facts off those models; the sketch below is only an illustration of a
-filled-in source, not a statement of what the contract requires.
+<!-- BEGIN GENERATED: fields-stream-source -->
+`analitiq.contracts.stream.StreamSource` — closed (`additionalProperties: false`); required: `endpoint_ref`
+
+| Field | Required | Type | Default | Constraints |
+|---|---|---|---|---|
+| `endpoint_ref` | **yes** | ConnectorEndpointRef \| ConnectionEndpointRef (by `scope`) | — | — |
+| `selected_columns` | no | array of string \| null | `None` | — |
+| `filters` | no | array of Filter \| null | `None` | — |
+| `replication` | no | FullRefreshReplication \| IncrementalReplication (by `method`) \| null | `None` | — |
+| `database_pagination` | no | OffsetDatabasePagination \| KeysetDatabasePagination (by `type`) \| null | `None` | — |
+| `primary_keys` | no | array of string \| null | `None` | — |
+<!-- END GENERATED: fields-stream-source -->
+
+`replication` and `database_pagination` are discriminated unions —
+`analitiq.contracts.stream.{FullRefreshReplication, IncrementalReplication}` and
+`analitiq.contracts.stream.{OffsetDatabasePagination, KeysetDatabasePagination}`
+respectively. The sketch below illustrates a filled-in source; it is not a
+statement of what the contract requires.
 
 ```jsonc
 {

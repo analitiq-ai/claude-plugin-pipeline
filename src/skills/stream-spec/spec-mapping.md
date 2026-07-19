@@ -15,9 +15,17 @@ coercion are declared. If a transformation is expressible here, it belongs here;
 if it is not, it belongs to the connector or the destination endpoint, never to a
 side channel invented on the stream.
 
-The accepted shape is `analitiq.contracts.stream.StreamMapping`, with
-`analitiq.contracts.stream.{Assignment, AssignmentTarget, AssignmentValue,
-ConstantValue, GetExpression, PipeExpression, FnExpression}` for its members.
+<!-- BEGIN GENERATED: fields-stream-mapping -->
+`analitiq.contracts.stream.StreamMapping` — closed (`additionalProperties: false`); required: none
+
+| Field | Required | Type | Default | Constraints |
+|---|---|---|---|---|
+| `assignments` | no | array of Assignment | — | — |
+<!-- END GENERATED: fields-stream-mapping -->
+
+Each `assignments[]` entry (`analitiq.contracts.stream.Assignment`) pairs a
+`target` with a `value`, plus an optional `validate` block (see
+`spec-validation-rules.md`):
 
 ```jsonc
 {
@@ -54,7 +62,17 @@ diff the user did not ask for.
 
 ## `assignments[].value`
 
-Exactly one of `expression` or `constant` (`ADV-STRM-008`):
+<!-- BEGIN GENERATED: fields-assignment-value -->
+`analitiq.contracts.stream.AssignmentValue` — closed (`additionalProperties: false`); required: none
+
+| Field | Required | Type | Default | Constraints |
+|---|---|---|---|---|
+| `expression` | no | GetExpression \| PipeExpression \| null | `None` | — |
+| `constant` | no | ConstantValue \| null | `None` | — |
+<!-- END GENERATED: fields-assignment-value -->
+
+Both members are individually optional, but exactly one must be present
+(`ADV-STRM-008`):
 
 - `expression` — one of:
   - `{"op": "get", "path": "<source field>"}` — read a source field. The default;
@@ -79,7 +97,24 @@ conversion function names are closed (`analitiq.contracts.stream.FnExpression`);
 the engine's `version`/`args` node fields are deliberately not published, so
 never author them.
 
-## `assignments[].target.path`
+## `assignments[].target`
+
+<!-- BEGIN GENERATED: fields-assignment-target -->
+`analitiq.contracts.stream.AssignmentTarget` — closed (`additionalProperties: false`); required: `arrow_type`, `path`
+
+| Field | Required | Type | Default | Constraints |
+|---|---|---|---|---|
+| `path` | **yes** | string | — | `minLength=1` |
+| `arrow_type` | **yes** | string | — | `pattern=^(?:Null\|Boolean\|Int8\|Int16\|Int32\|Int64\|UInt8\|UInt16\|UInt32\|UInt64\|Float16\|Float32\|Float64\|Utf8\|LargeUtf8\|Binary\|LargeBinary\|Date32\|Date64\|FixedSizeBinary\([1-9][0-9]*\)\|Time32\((?:SECOND\|MILLISECOND)\)\|Time64\((?:MICROSECOND\|NANOSECOND)\)\|Timestamp\((?:SECOND\|MILLISECOND\|MICROSECOND\|NANOSECOND)(?:\s*,\s*(?:null\|[A-Za-z_][A-Za-z0-9_/\-]*\|Etc/GMT[+\-][0-9]{1,2}\|[+\-](?:0[0-9]\|1[0-4]):[0-5][0-9]))?\)\|Duration\((?:SECOND\|MILLISECOND\|MICROSECOND\|NANOSECOND)\)\|Interval\((?:YEAR_MONTH\|DAY_TIME\|MONTH_DAY_NANO)\)\|Decimal128\((?:[1-9]\|[12][0-9]\|3[0-8])\s*,\s*-?[0-9]+\)\|Decimal256\((?:[1-9]\|[1-6][0-9]\|7[0-6])\s*,\s*-?[0-9]+\)\|List<.+>\|LargeList<.+>\|FixedSizeList<.+>\[[1-9][0-9]*\]\|Struct<.+>\|Map<.+,\s*.+>\|SparseUnion<.+>\|DenseUnion<.+>\|Dictionary<.+,\s*.+>\|RunEndEncoded<.+,\s*.+>\|Object\|List\|Json)$` |
+| `native_type` | no | string \| null | `None` | — |
+| `nullable` | no | boolean | `True` | — |
+| `properties` | no | map of ArrowFieldSpec \| null | `None` | — |
+| `items` | no | ArrowFieldSpec \| null | `None` | — |
+
+Carries 3 declarative cross-field `if`/`then` rule(s) — see the advisory rules for their prose.
+<!-- END GENERATED: fields-assignment-target -->
+
+### `target.path`
 
 Must be unique within `assignments` (`ADV-STRM-002`).
 
@@ -96,8 +131,8 @@ validator does **not** check this.
 
 ## `arrow_type` vocabulary
 
-Both `target.arrow_type` and `constant.arrow_type` are **required** and must be
-**fully-qualified** Apache Arrow canonical type strings. The vocabulary is owned
+`constant.arrow_type` is required too, and every `arrow_type` — target or
+constant — must be **fully-qualified**. The vocabulary is owned
 by `analitiq.contracts.endpoints.ARROW_TYPE_PATTERN` — the same pattern the
 endpoint columns use — so bare parameterized forms (`Timestamp`, `Decimal128`,
 `Time64`, `Duration`, `Interval`, `FixedSizeBinary`, …) are rejected. See

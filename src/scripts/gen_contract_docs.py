@@ -36,7 +36,7 @@ from pathlib import Path
 
 from _analitiq import ensure_deps_or_reexec
 
-# Repository-root-relative docs the generator is allowed to rewrite. A block id
+# Docs the generator is allowed to rewrite: everything under `src/`. A block id
 # may appear in more than one file; every occurrence is rendered identically.
 DOCS_ROOT = Path(__file__).resolve().parent.parent
 
@@ -53,22 +53,44 @@ class UnknownBlock(KeyError):
 
 
 # ---------------------------------------------------------------------------
-# Renderers. Each takes no arguments and returns the markdown body for its
-# block, WITHOUT the surrounding markers and ending in exactly one newline.
+# Renderers (`render_*`) and their helpers. Every `render_*` takes no arguments
+# and returns the markdown body for its block, WITHOUT the surrounding markers
+# and ending in exactly one newline — `_BLOCK_RE` depends on that trailing newline.
 # ---------------------------------------------------------------------------
 
 def _md_escape(text: str) -> str:
-    """Escape a value for a markdown table cell.
+    """Make a value safe for a markdown table cell.
 
-    Only `|` and newlines need handling: every value emitted here lands inside a
-    code span, where a backslash is literal — escaping it would corrupt the very
-    regexes this generator exists to reproduce faithfully.
+    Escapes `|` (which would end the cell) and flattens newlines. Deliberately
+    does NOT escape backslashes: the values that reach here are either wrapped in
+    a code span by `_code()`, where a backslash is literal, or are published rule
+    prose. Escaping would corrupt the very regexes this generator exists to
+    reproduce faithfully.
+
+    The plain-cell callers (advisory prose, type summaries) are therefore only as
+    safe as the pinned contract's own text. That holds for every rule rc10 ships;
+    if a future rule's prose contains markdown metacharacters, escape at that
+    call site rather than here.
     """
     return text.replace("|", "\\|").replace("\n", " ")
 
 
 def _code(value: object) -> str:
     return f"`{_md_escape(str(value))}`"
+
+
+def _unwrap_alternation(pattern: str) -> str:
+    """Strip the `^(?:…)$` wrapper the published alternation patterns use.
+
+    `removeprefix`/`removesuffix` silently no-op on a miss, which would leak the
+    anchors into the docs as though they were part of the first alternative. The
+    wrapper shape is an assumption about the pinned contract, so assert it.
+    """
+    if not (pattern.startswith("^(?:") and pattern.endswith(")$")):
+        raise RuntimeError(
+            f"expected an anchored '^(?:…)$' alternation, got {pattern[:40]!r}…; "
+            "the pinned contract changed shape and this renderer needs updating")
+    return pattern[len("^(?:"):-len(")$")]
 
 
 def render_schema_urls() -> str:
@@ -117,7 +139,7 @@ def render_shared_vocabulary() -> str:
 def render_secret_ref_grammar() -> str:
     from analitiq.contracts.connection import SECRET_REF_VALUE_PATTERN
 
-    schemes = SECRET_REF_VALUE_PATTERN.removeprefix("^(?:").removesuffix(")$").split("|")
+    schemes = _split_top_level_alternatives(_unwrap_alternation(SECRET_REF_VALUE_PATTERN))
     out = [
         "Every `secret_refs` value must carry an explicit scheme — a bare token "
         "(a pasted raw secret) is rejected by the contract.",
@@ -186,6 +208,20 @@ def _accepted_operators_by_scope() -> dict[str, list[str]]:
                 continue
             operators.append(operator)
         accepted[scope] = operators
+
+    # The baseline guard above only covers the filter-free document. The probe's
+    # OTHER moving part is the filter shape itself: rename `Filter.field` upstream
+    # and the baseline still validates while every operator is rejected, yielding
+    # an empty-but-well-formed table that says "no operator is ever accepted".
+    # Assert completeness here, at the boundary, so a local run fails too rather
+    # than only the test suite.
+    union = set(accepted["connection"]) | set(accepted["connector"])
+    published = set(get_args(FilterOperator))
+    if union != published:
+        raise RuntimeError(
+            "filter-operator probe did not reproduce the published vocabulary "
+            f"(missing {sorted(published - union)}, unexpected {sorted(union - published)}); "
+            "the probe's minimal filter shape needs updating for the pinned contract")
     return accepted
 
 
@@ -208,6 +244,14 @@ def render_filter_operators() -> str:
     return "\n".join(out) + "\n"
 
 
+# Advisory families this plugin is in the lane of. The rest of the published
+# catalogue (ADV-CTOR/ENDP/TMAP/CONN/HTTP/DSYNC) governs connector documents or
+# server-side run records, which this plugin never authors. Pinned so a family
+# that silently disappears — or a genuinely new in-scope one — is a test failure
+# rather than a rule quietly missing from an agent's instructions.
+IN_SCOPE_ADVISORY_FAMILIES = ("ADV-PIPE-", "ADV-RETRY-", "ADV-STRM-", "ADV-DBEP-")
+
+
 def _advisory_block(prefixes: tuple[str, ...]) -> str:
     from analitiq.contracts.shared.advisory import all_rules
 
@@ -215,8 +259,12 @@ def _advisory_block(prefixes: tuple[str, ...]) -> str:
         (r for r in all_rules() if r.id.startswith(prefixes)),
         key=lambda r: r.id,
     )
-    if not rules:
-        raise RuntimeError(f"no advisory rules matched {prefixes!r}")
+    # Per-prefix, not just overall: a sibling family still matching would
+    # otherwise mask one that vanished (dropping ADV-RETRY-* still leaves the
+    # four ADV-PIPE-* rules, and the block would render as if nothing were lost).
+    for prefix in prefixes:
+        if not any(r.id.startswith(prefix) for r in rules):
+            raise RuntimeError(f"no advisory rules matched {prefix!r}")
     out = ["| Rule | Constraint |", "|---|---|"]
     out += [f"| {_code(r.id)} | {_md_escape(r.prose)} |" for r in rules]
     return "\n".join(out) + "\n"
@@ -237,6 +285,8 @@ def render_advisory_endpoint() -> str:
 def render_validator_ids() -> str:
     from analitiq.validator import VALIDATOR_IDS
 
+    if not VALIDATOR_IDS:
+        raise RuntimeError("the published package exposed no validator ids")
     out = [
         "Validator ids the published package can emit:",
         "",
@@ -248,9 +298,10 @@ def render_validator_ids() -> str:
 def render_endpoint_id_derivation() -> str:
     """The derived database-endpoint handle, shown by calling the published helper.
 
-    Local prose stated this formula by hand in eight places and had already
-    drifted (one site wrote `slug(table)` where the rest wrote `slug(name)`).
-    A worked example computed by the package settles it.
+    Prose used to restate this formula by hand in every file that mentioned an
+    `endpoint_id`, and had already drifted — one site wrote `slug(table)` where
+    the rest wrote `slug(name)`. A worked example computed by the package settles
+    it, and cannot go stale.
     """
     from analitiq.contracts.endpoint_identity import derive_db_endpoint_id
 
@@ -279,7 +330,7 @@ def render_endpoint_id_derivation() -> str:
     return "\n".join(out) + "\n"
 
 
-# --- G2: entity field tables, rendered from the published models ---------------
+# --- Entity field tables, rendered from the published models -------------------
 
 # Block id -> (module path, model class). Each entry emits one field table.
 FIELD_TABLE_MODELS = {
@@ -327,6 +378,15 @@ def _unwrap_nullable(schema: dict) -> tuple[dict, bool]:
     return (non_null[0] if len(non_null) == 1 else {"anyOf": non_null}), True
 
 
+# Keywords that actually say something about a value's type. A schema carrying
+# none of them is an unconstrained "any"; a schema carrying one this function
+# does not handle is a gap worth failing on.
+_TYPE_BEARING_KEYS = frozenset({
+    "type", "$ref", "const", "enum", "anyOf", "oneOf", "allOf", "not",
+    "items", "properties", "additionalProperties", "prefixItems",
+})
+
+
 def _type_summary(schema: dict) -> str:
     """One-cell description of a property's type, following $ref by name only."""
     schema, _ = _unwrap_nullable(schema)
@@ -338,6 +398,13 @@ def _type_summary(schema: dict) -> str:
         return " | ".join(repr(v) for v in schema["enum"])
     if "anyOf" in schema:
         return " | ".join(_type_summary(o) for o in schema["anyOf"])
+    # A discriminated union emits `oneOf` + `discriminator`. Summarising it as a
+    # bare type would read to an agent as "free-form" when it is in fact a closed
+    # set of variants — `endpoint_ref` is exactly this shape.
+    if "oneOf" in schema:
+        variants = " | ".join(_type_summary(o) for o in schema["oneOf"])
+        discriminator = schema.get("discriminator", {}).get("propertyName")
+        return f"{variants} (by `{discriminator}`)" if discriminator else variants
     kind = schema.get("type")
     if kind == "array":
         return f"array of {_type_summary(schema.get('items', {}))}"
@@ -346,7 +413,18 @@ def _type_summary(schema: dict) -> str:
         if isinstance(extra, dict) and extra:
             return f"map of {_type_summary(extra)}"
         return "object"
-    return kind or "any"
+    if kind:
+        return kind
+    # No type-bearing keyword at all means the field genuinely accepts any JSON
+    # value (`Column.default` is declared that way). Annotation-only keys like
+    # `title`/`description`/`default` do not constrain the type, so ignore them.
+    # Anything else is a construct this summariser does not understand, and
+    # quietly calling it "any" would misdescribe the contract.
+    if not (set(schema) & _TYPE_BEARING_KEYS):
+        return "any"
+    raise RuntimeError(
+        f"cannot summarise schema shape {sorted(schema)!r}; the pinned contract "
+        "emits a construct this generator does not handle")
 
 
 def _constraint_summary(schema: dict) -> str:
@@ -399,10 +477,15 @@ def _render_field_table(module_path: str, class_name: str) -> str:
     return "\n".join(out) + "\n"
 
 
-# --- G3: closed-enum vocabulary ------------------------------------------------
+# --- Closed-enum vocabulary ----------------------------------------------------
 
 def render_enum_vocabulary() -> str:
-    """Every closed vocabulary an author picks a value from, with its import path."""
+    """Vocabularies an author picks a value from, with where each is published.
+
+    Includes `write.mode`, which is closed only for a database destination — an
+    API destination's mode is a key the endpoint declares, so the field itself is
+    an open `str`. That caveat is emitted inline with the row.
+    """
     import importlib
     from typing import get_args
 
@@ -418,9 +501,15 @@ def render_enum_vocabulary() -> str:
     for label, module_path, class_name, field in targets:
         model = getattr(importlib.import_module(module_path), class_name)
         annotation = model.model_fields[field].annotation
-        members = [a for a in get_args(annotation) if a is not None and not isinstance(a, type)]
+        members = [a for a in get_args(annotation) if isinstance(a, str)]
+        # isinstance(str), not truthiness: Optional[Literal[...]] yields
+        # (Literal['a','b'], NoneType), whose Literal member is neither None nor a
+        # type — a truthy-but-bogus single "member" that would render as
+        # "typing.Literal['a','b']" instead of the vocabulary.
         if not members:
-            raise RuntimeError(f"{class_name}.{field} exposed no Literal members")
+            raise RuntimeError(
+                f"{class_name}.{field} exposed no string Literal members "
+                f"(annotation {annotation!r}); it is no longer a closed vocabulary")
         out.append(
             f"| {label} | {', '.join(f'`{m}`' for m in members)} "
             f"| `{module_path}.{class_name}.{field}` |"
@@ -495,8 +584,7 @@ def render_arrow_types() -> str:
     """
     from analitiq.contracts.endpoints import ARROW_TYPE_PATTERN
 
-    alternatives = _split_top_level_alternatives(
-        ARROW_TYPE_PATTERN.removeprefix("^(?:").removesuffix(")$"))
+    alternatives = _split_top_level_alternatives(_unwrap_alternation(ARROW_TYPE_PATTERN))
     plain = [a for a in alternatives if a.replace("_", "").isalnum()]
     parameterized = [a for a in alternatives if a not in plain and "<" not in a]
     containers = [a for a in alternatives if "<" in a]

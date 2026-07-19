@@ -34,12 +34,25 @@ produced, after any `pipe`/`fn` conversion, and before the destination write. A
 rule that names a source field name rather than the mapped output path is
 therefore checking nothing.
 
-## `rules[].type`
+## `rules[]`
 
-The member list is generated in `SKILL.md` § Closed vocabularies
-(`analitiq.contracts.stream.ValidationRule.type`), and `ADV-STRM-009` settles
-which members take a `value` and which must omit it. What neither states is what
-each member *means*:
+<!-- BEGIN GENERATED: fields-validation-rule -->
+`analitiq.contracts.stream.ValidationRule` — closed (`additionalProperties: false`); required: `field`, `type`
+
+| Field | Required | Type | Default | Constraints |
+|---|---|---|---|---|
+| `type` | **yes** | 'required' \| 'not_null' \| 'min_length' \| 'max_length' \| 'pattern' \| 'range' \| 'in_list' | — | — |
+| `field` | **yes** | string | — | `minLength=1` |
+| `value` | no | any | `None` | — |
+| `message` | no | string \| null | `None` | — |
+
+Carries 1 declarative cross-field `if`/`then` rule(s) — see the advisory rules for their prose.
+<!-- END GENERATED: fields-validation-rule -->
+
+### `rules[].type`
+
+`ADV-STRM-009` settles which members take a `value` and which must omit it. What
+neither it nor the table states is what each member *means*:
 
 - `required` — the field must be present.
 - `not_null` — the field must be present and non-null.
@@ -48,7 +61,7 @@ each member *means*:
 - `range` — the numeric value falls inside the `{min, max}` in `value`.
 - `in_list` — the value is one of the array in `value`.
 
-## `rules[].field`
+### `rules[].field`
 
 Must match an `assignments[].target.path` in the same mapping — a `field` that
 resolves to no mapped output is a silent typo. Endpoint/field resolution happens

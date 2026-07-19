@@ -11,6 +11,7 @@ absent so a bare `pytest` never fails confusingly.
 """
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -41,18 +42,33 @@ def test_generated_blocks_in_sync():
     )
 
 
-def test_every_doc_block_has_a_renderer():
-    """A block id with no renderer must fail loud, not be silently left alone."""
-    referenced = {
+def _referenced_block_ids():
+    return {
         m.group("id")
         for p in G.generated_docs()
         for m in G._BLOCK_RE.finditer(p.read_text())
     }
+
+
+def test_every_doc_block_has_a_renderer():
+    """A block id with no renderer must fail loud, not be silently left alone."""
+    referenced = _referenced_block_ids()
     assert referenced, "expected at least one generated block across the docs"
     assert referenced <= set(G.RENDERERS), (
         f"docs reference block ids with no renderer: "
         f"{sorted(referenced - set(G.RENDERERS))}"
     )
+
+
+def test_every_renderer_is_referenced_by_a_doc():
+    """The inverse: a renderer no doc consumes is dead code.
+
+    It also reads as covered, because test_renderer_emits_nonempty_block
+    parametrizes over RENDERERS and so reports a passing test for a block that
+    reaches no agent. Either wire it into a doc or delete it.
+    """
+    unreferenced = sorted(set(G.RENDERERS) - _referenced_block_ids())
+    assert not unreferenced, f"renderers referenced by no doc: {unreferenced}"
 
 
 def test_no_malformed_markers():
@@ -62,13 +78,19 @@ def test_no_malformed_markers():
     makes the region invisible to the regex — the generator would skip it and the
     in-sync test would pass while the doc silently kept stale hand-typed content.
     """
-    for path in sorted((G.DOCS_ROOT).rglob("*.md")):
+    # Count on a deliberately loose detector: any HTML comment mentioning
+    # GENERATED. Counting the exact `<!-- BEGIN GENERATED` prefix would make the
+    # assertion vacuous when BOTH markers are mangled inside the prefix itself
+    # (`<!-- BEGIN  GENERATED: x -->`), which is the realistic
+    # copy-paste-a-broken-template case: all three counts would be 0 and the doc
+    # would keep stale hand-typed content forever.
+    loose = re.compile(r"<!--.*?GENERATED.*?-->", re.IGNORECASE | re.DOTALL)
+    for path in sorted(G.DOCS_ROOT.rglob("*.md")):
         text = path.read_text()
-        begins = text.count("<!-- BEGIN GENERATED")
-        ends = text.count("<!-- END GENERATED")
+        markers = len(loose.findall(text))
         parsed = len(G._BLOCK_RE.findall(text))
-        assert begins == ends == parsed, (
-            f"{path.relative_to(ROOT)}: {begins} BEGIN / {ends} END markers but "
+        assert markers == 2 * parsed, (
+            f"{path.relative_to(ROOT)}: {markers} GENERATED marker(s) but "
             f"{parsed} parsed block(s) — a marker is malformed and is being skipped"
         )
 
@@ -148,9 +170,15 @@ def test_filter_operator_scopes_are_disjoint_and_complete():
     from analitiq.contracts.stream import FilterOperator
 
     accepted = G._accepted_operators_by_scope()
-    union = set(accepted["connection"]) | set(accepted["connector"])
-    assert union == set(get_args(FilterOperator)), (
+    connection, connector = set(accepted["connection"]), set(accepted["connector"])
+    assert connection | connector == set(get_args(FilterOperator)), (
         "probe did not reproduce the full published operator vocabulary")
-    # Each scope must genuinely restrict — if the probe silently accepted
-    # everything, the generated table would be wrong but still look plausible.
-    assert set(accepted["connection"]) != set(accepted["connector"])
+    # Pin the split itself, not merely that one exists. `!=` would still pass if a
+    # pin bump swapped the two vocabularies, which would generate a table that
+    # actively misleads the agent rather than merely omitting something.
+    assert {"like", "ilike", "is_null", "is_not_null"} <= connection - connector, (
+        "database-only operators are no longer connection-scope-only")
+    assert {"contains", "starts_with", "ends_with"} <= connector - connection, (
+        "API-only operators are no longer connector-scope-only")
+    assert {"eq", "neq", "in", "not_in"} <= connection & connector, (
+        "common operators are no longer accepted in both scopes")

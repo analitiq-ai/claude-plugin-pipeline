@@ -40,9 +40,34 @@ def _examples():
 EXAMPLES = list(_examples())
 
 
+# Exact per-skill counts, not a total floor. A floor is defeated by growth: rename
+# one examples/ directory and add examples elsewhere, and the total still clears the
+# bar while a whole entity silently goes unvalidated.
+EXPECTED_EXAMPLE_COUNTS = {
+    "pipeline-spec": 3, "stream-spec": 3, "connection-spec": 9, "endpoint-spec": 4,
+}
+
+
 def test_examples_are_discovered():
     """Guard the guard: a glob that silently matches nothing would pass vacuously."""
-    assert len(EXAMPLES) >= 19, f"expected the bundled examples, found {len(EXAMPLES)}"
+    from collections import Counter
+
+    found = Counter(p.id.split("/", 1)[0] for p in EXAMPLES)
+    assert dict(found) == EXPECTED_EXAMPLE_COUNTS, (
+        f"bundled example counts changed: {dict(found)} != {EXPECTED_EXAMPLE_COUNTS}. "
+        "If this is intentional, update EXPECTED_EXAMPLE_COUNTS; if a directory was "
+        "renamed, its examples are no longer being validated.")
+
+
+def test_every_spec_skill_with_examples_is_mapped():
+    """A new spec skill shipping examples must not be silently unvalidated."""
+    skills_root = ROOT / "src" / "skills"
+    with_examples = {
+        d.parent.name for d in skills_root.glob("*/examples") if d.is_dir()
+    }
+    assert with_examples == set(SKILL_ENTITY), (
+        f"spec skills shipping examples: {sorted(with_examples)}, "
+        f"but SKILL_ENTITY maps {sorted(SKILL_ENTITY)}")
 
 
 @pytest.mark.parametrize("entity,path", EXAMPLES)

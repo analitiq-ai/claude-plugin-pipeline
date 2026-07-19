@@ -14,9 +14,8 @@ contract (`analitiq.contracts.endpoints.DatabaseEndpointDoc`).
 
 - `spec-database-object.md` — catalog/schema/name/object_type rules; no
   identifier normalization.
-- `spec-columns.md` — `name`, `native_type` (required), `arrow_type`
-  (required, fully-qualified Apache Arrow canonical type), `nullable`,
-  `default`, `comment`, `ordinal_position`.
+- `spec-columns.md` — the column shape, provider `native_type` labels and
+  the fully-qualified Apache Arrow `arrow_type` vocabulary.
 - At least one of `examples/*.example.json` for the database dialect
   you're authoring.
 
@@ -36,6 +35,27 @@ Database endpoints use `scope: connection` and live under
 - The column shape per table/view/collection.
 - Primary keys: optional declared list, must reference existing columns.
 
+## Top-level shape
+
+<!-- BEGIN GENERATED: fields-database-endpoint -->
+`analitiq.contracts.endpoints.DatabaseEndpointDoc` — closed (`additionalProperties: false`); required: `$schema`, `columns`, `database_object`, `endpoint_id`
+
+| Field | Required | Type | Default | Constraints |
+|---|---|---|---|---|
+| `endpoint_id` | **yes** | string | — | `pattern=^[a-z0-9][a-z0-9_-]*$`, `minLength=1` |
+| `display_name` | no | string \| null | `None` | `pattern=^\S(?:[\s\S]*\S)?$`, `minLength=1`, `maxLength=120` |
+| `description` | no | string \| null | `None` | `maxLength=2000` |
+| `tags` | no | array of string \| null | `None` | `maxItems=50`, `item pattern=^\S(?:[\s\S]*\S)?$`, `item minLength=1` |
+| `$schema` | **yes** | const 'https://schemas.analitiq.ai/database-endpoint/latest.json' | — | — |
+| `database_object` | **yes** | DatabaseObject | — | — |
+| `columns` | **yes** | array of Column | — | `minItems=1` |
+| `primary_keys` | no | array of string \| null | `None` | `minItems=1` |
+<!-- END GENERATED: fields-database-endpoint -->
+
+The model is closed: a field the table does not list is rejected, not ignored.
+That includes every server-managed field (`schema_hash`, `org_id`, timestamps) —
+the published model is the **authored** shape, not the persisted one.
+
 ## What this skill does NOT cover
 
 - The connection that owns this endpoint — see `connection-spec`.
@@ -50,8 +70,7 @@ Every authored document must:
 
 1. Declare `$schema` with the database-endpoint URL from the table below (the
    schema marks it a `const`-required field).
-2. Include `endpoint_id`, `database_object`, `columns` (non-empty), and
-   `$schema` — the top-level fields `DatabaseEndpointDoc` requires.
+2. Carry every required field from the top-level shape table above.
    `endpoint_id` is the **derived** handle computed by `scripts/endpoint_id.py`,
    never a hand-authored slug — see `spec-database-object.md`
    §Derived `endpoint_id`.

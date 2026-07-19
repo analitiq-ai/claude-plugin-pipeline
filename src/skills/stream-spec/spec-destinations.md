@@ -1,9 +1,20 @@
 # `destinations` block
 
-The accepted shape is `analitiq.contracts.stream.StreamDestination`, with
-`analitiq.contracts.stream.Write` and `analitiq.contracts.stream.Execution` for
-its two sub-blocks. The sketch below illustrates a filled-in destination; the
-required-field and bound facts live on those models.
+`stream.destinations[]` is a non-empty array of:
+
+<!-- BEGIN GENERATED: fields-stream-destination -->
+`analitiq.contracts.stream.StreamDestination` — closed (`additionalProperties: false`); required: `endpoint_ref`, `write`
+
+| Field | Required | Type | Default | Constraints |
+|---|---|---|---|---|
+| `endpoint_ref` | **yes** | ConnectorEndpointRef \| ConnectionEndpointRef (by `scope`) | — | — |
+| `write` | **yes** | Write | — | — |
+| `execution` | no | Execution \| null | `None` | — |
+
+Carries 4 declarative cross-field `if`/`then` rule(s) — see the advisory rules for their prose.
+<!-- END GENERATED: fields-stream-destination -->
+
+The sketch below illustrates a filled-in destination.
 
 ```jsonc
 {
@@ -35,7 +46,18 @@ destination connection may legitimately appear in several destination entries**
 as long as the endpoint differs — fanning one stream into two tables of the same
 warehouse is a normal shape, not a duplicate.
 
-## `write.mode`
+## `write`
+
+<!-- BEGIN GENERATED: fields-stream-write -->
+`analitiq.contracts.stream.Write` — closed (`additionalProperties: false`); required: `mode`
+
+| Field | Required | Type | Default | Constraints |
+|---|---|---|---|---|
+| `mode` | **yes** | string | — | `minLength=1` |
+| `conflict_keys` | no | array of string \| null | `None` | `minItems=1`, `item minLength=1` |
+<!-- END GENERATED: fields-stream-write -->
+
+### `write.mode`
 
 | Destination kind | allowed values |
 |---|---|
@@ -48,22 +70,30 @@ is narrowed to the closed set. The orchestrator's `WriteModeMapper` (see
 `../pipeline-builder/references/enum-mappers.md`) classifies the user's intent to
 one of these.
 
-## `write.conflict_keys`
+### `write.conflict_keys`
 
 `ADV-STRM-011` governs when this field is required and when it is forbidden; the
 `StreamDestination` model can enforce it because the destination's ref tells it
-the scope. Shape — a **single composite key set**, a non-empty array of
-destination field names:
+the scope. It is a **single composite key set** of destination field names — not
+a list of alternative key sets:
 
 ```jsonc
 ["id"]                       // or ["org_id", "external_id"] for a composite key
 ```
 
-Multiple alternative key sets are out of scope in the current contract. Every key
-field must exist in the destination endpoint's schema; that is resolved
+Every key field must exist in the destination endpoint's schema; that is resolved
 server-side at save time, not by the local validator.
 
 ## `execution` (per-destination override)
+
+<!-- BEGIN GENERATED: fields-stream-execution -->
+`analitiq.contracts.stream.Execution` — closed (`additionalProperties: false`); required: none
+
+| Field | Required | Type | Default | Constraints |
+|---|---|---|---|---|
+| `batch_size` | no | integer \| null | `None` | `min=1`, `max=100000` |
+| `max_concurrent_batches` | no | integer \| null | `None` | `min=1`, `max=100` |
+<!-- END GENERATED: fields-stream-execution -->
 
 `execution` is one of **three** places batching is decided, and each has a
 different owner:

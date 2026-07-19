@@ -1,26 +1,32 @@
 # `columns` block
 
-A non-empty array. Each column declares:
+A non-empty array of:
 
-```jsonc
-{
-  "name": "id",                              // required, minLength 1
-  "native_type": "uuid",                     // required, minLength 1; "unknown" if undetectable
-  "arrow_type": "Utf8",                      // required; fully-qualified Apache Arrow canonical type
-  "nullable": false,                         // optional
-  "default": null,                           // optional; any JSON value
-  "comment": null,                           // optional; user or provider comment
-  "ordinal_position": 1                      // optional integer >= 1
-}
-```
+<!-- BEGIN GENERATED: fields-column -->
+`analitiq.contracts.endpoints.Column` — closed (`additionalProperties: false`); required: `arrow_type`, `name`, `native_type`
+
+| Field | Required | Type | Default | Constraints |
+|---|---|---|---|---|
+| `name` | **yes** | string | — | `minLength=1` |
+| `native_type` | **yes** | string | — | `minLength=1` |
+| `arrow_type` | **yes** | string | — | `pattern=^(?:Null\|Boolean\|Int8\|Int16\|Int32\|Int64\|UInt8\|UInt16\|UInt32\|UInt64\|Float16\|Float32\|Float64\|Utf8\|LargeUtf8\|Binary\|LargeBinary\|Date32\|Date64\|FixedSizeBinary\([1-9][0-9]*\)\|Time32\((?:SECOND\|MILLISECOND)\)\|Time64\((?:MICROSECOND\|NANOSECOND)\)\|Timestamp\((?:SECOND\|MILLISECOND\|MICROSECOND\|NANOSECOND)(?:\s*,\s*(?:null\|[A-Za-z_][A-Za-z0-9_/\-]*\|Etc/GMT[+\-][0-9]{1,2}\|[+\-](?:0[0-9]\|1[0-4]):[0-5][0-9]))?\)\|Duration\((?:SECOND\|MILLISECOND\|MICROSECOND\|NANOSECOND)\)\|Interval\((?:YEAR_MONTH\|DAY_TIME\|MONTH_DAY_NANO)\)\|Decimal128\((?:[1-9]\|[12][0-9]\|3[0-8])\s*,\s*-?[0-9]+\)\|Decimal256\((?:[1-9]\|[1-6][0-9]\|7[0-6])\s*,\s*-?[0-9]+\)\|List<.+>\|LargeList<.+>\|FixedSizeList<.+>\[[1-9][0-9]*\]\|Struct<.+>\|Map<.+,\s*.+>\|SparseUnion<.+>\|DenseUnion<.+>\|Dictionary<.+,\s*.+>\|RunEndEncoded<.+,\s*.+>\|Object\|List\|Json)$` |
+| `nullable` | no | boolean \| null | `None` | — |
+| `default` | no | any \| null | `None` | — |
+| `comment` | no | string \| null | `None` | — |
+| `ordinal_position` | no | integer \| null | `None` | `min=1` |
+| `properties` | no | map of ColumnFieldSpec \| null | `None` | — |
+| `items` | no | ColumnFieldSpec \| null | `None` | — |
+
+Carries 3 declarative cross-field `if`/`then` rule(s) — see the advisory rules for their prose.
+<!-- END GENERATED: fields-column -->
 
 ## `name`
 
-Required. Verbatim from introspection.
+Verbatim from introspection.
 
 ## `native_type`
 
-Required. Provider-native type label, e.g.:
+The provider-native type label, e.g.:
 
 | Dialect | examples |
 |---|---|
@@ -34,7 +40,7 @@ Use `"unknown"` as a sentinel when the engine doesn't expose a type.
 
 ## `arrow_type`
 
-Required. Fully-qualified Apache Arrow canonical type string. Base names are
+Fully-qualified Apache Arrow canonical type string. Base names are
 PascalCase from `arrow/format/Schema.fbs`.
 
 <!-- BEGIN GENERATED: arrow-types -->
@@ -142,25 +148,22 @@ shape unambiguously.
 
 ## `nullable`
 
-Optional. `true` when the database reports the column as nullable, else
-`false`. Omit when the dialect doesn't expose this (e.g., schemaless
-engines).
+`true` when the database reports the column as nullable, else `false`. Omit when
+the dialect doesn't expose this (e.g., schemaless engines).
 
 ## `default`
 
-Optional. Any JSON value (the parsed default expression if reasonable,
-or `null`). The runtime treats this as advisory — actual default
-behavior is dialect-owned.
+The parsed default expression if reasonable, else `null`. The runtime treats this
+as advisory — actual default behavior is dialect-owned.
 
 ## `comment`
 
-Optional. Provider-attached comment (PostgreSQL `COMMENT ON COLUMN`,
-MySQL `COMMENT`, etc.). Forwarded verbatim. `null` when absent.
+Provider-attached comment (PostgreSQL `COMMENT ON COLUMN`, MySQL `COMMENT`,
+etc.). Forwarded verbatim. `null` when absent.
 
 ## `ordinal_position`
 
-Optional integer ≥ 1. Used to canonicalize column order for hashing.
-Omit for schemaless engines (MongoDB).
+Canonicalizes column order for hashing. Omit for schemaless engines (MongoDB).
 
 ## Uniqueness
 

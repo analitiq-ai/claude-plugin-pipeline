@@ -2,13 +2,7 @@
 
 The `source` and every `destinations[]` entry carry an `endpoint_ref`. It is a
 **discriminated union on `scope`** (`analitiq.contracts.stream.EndpointRef`) —
-the two scopes have different shapes and different required fields:
-
-- `scope: "connector"` → `analitiq.contracts.stream.ConnectorEndpointRef`
-- `scope: "connection"` → `analitiq.contracts.stream.ConnectionEndpointRef`,
-  whose `database_object` is `analitiq.contracts.stream.DatabaseObject`
-
-Read requiredness off those models rather than off the sketches below.
+the two scopes have different shapes and different required fields, tabled below.
 
 ## Prefer the ref discovery handed you
 
@@ -20,13 +14,15 @@ common way a stream stops resolving against the endpoint it was built for.
 
 ## `scope: "connector"` — public connector endpoint (API)
 
-```jsonc
-{
-  "scope": "connector",
-  "connection_id": "<connection-uuid>",
-  "endpoint_id": "<connector endpoint key>"
-}
-```
+<!-- BEGIN GENERATED: fields-connector-endpoint-ref -->
+`analitiq.contracts.stream.ConnectorEndpointRef` — closed (`additionalProperties: false`); required: `connection_id`, `endpoint_id`, `scope`
+
+| Field | Required | Type | Default | Constraints |
+|---|---|---|---|---|
+| `connection_id` | **yes** | string | — | `pattern=\S`, `minLength=1` |
+| `scope` | **yes** | const 'connector' | — | — |
+| `endpoint_id` | **yes** | string | — | `minLength=1` |
+<!-- END GENERATED: fields-connector-endpoint-ref -->
 
 Refers to a public endpoint baked into the connector document (typically API
 endpoints), pinned by the connection's `connector_version` at runtime.
@@ -36,25 +32,28 @@ pin.
 
 ## `scope: "connection"` — private database endpoint
 
-```jsonc
-{
-  "scope": "connection",
-  "connection_id": "<connection-uuid>",
-  "database_object": { "schema": "public", "name": "orders" },
-  "endpoint_id": "<derived endpoint handle>"
-}
-```
+<!-- BEGIN GENERATED: fields-connection-endpoint-ref -->
+`analitiq.contracts.stream.ConnectionEndpointRef` — closed (`additionalProperties: false`); required: `connection_id`, `database_object`, `scope`
+
+| Field | Required | Type | Default | Constraints |
+|---|---|---|---|---|
+| `connection_id` | **yes** | string | — | `pattern=\S`, `minLength=1` |
+| `scope` | **yes** | const 'connection' | — | — |
+| `database_object` | **yes** | DatabaseObject | — | — |
+| `endpoint_id` | no | string \| null | `None` | — |
+<!-- END GENERATED: fields-connection-endpoint-ref -->
 
 Refers to a private, connection-scoped database endpoint produced by
-introspection. **`database_object` is the required member here** — it carries the
-verbatim database-object identity, the same `{catalog?, schema?, name}` recorded
-on the endpoint document (author it from the endpoint doc's `database_object`,
-i.e. the `build_database_object(...)` output, so the two always agree).
+introspection. `database_object` (`analitiq.contracts.stream.DatabaseObject`)
+carries the verbatim database-object identity, the same `{catalog?, schema?,
+name}` recorded on the endpoint document — author it from the endpoint doc's
+`database_object`, i.e. the `build_database_object(...)` output, so the two
+always agree.
 
-`endpoint_id` is optional: omit it and the contract derives it; supply it and the
-contract verifies it against the derivation (`ADV-STRM-003`). Author it when the
-plugin can compute it, so the cross-document bundle check can resolve the
-reference by `(connection_id, endpoint_id)`.
+Omit `endpoint_id` and the contract derives it; supply it and the contract
+verifies it against the derivation (`ADV-STRM-003`). Author it when the plugin
+can compute it, so the cross-document bundle check can resolve the reference by
+`(connection_id, endpoint_id)`.
 
 <!-- BEGIN GENERATED: endpoint-id-derivation -->
 A database `endpoint_id` is **derived**, not chosen: it is a deterministic handle over the endpoint's verbatim locator, computed by `analitiq.contracts.endpoint_identity.derive_db_endpoint_id(catalog, schema, name)`.

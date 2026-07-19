@@ -1,15 +1,18 @@
 # `database_object` block
 
-```jsonc
-{
-  "database_object": {
-    "catalog": "analytics-prod",     // optional; e.g. database name, BigQuery project ID
-    "schema": "warehouse",           // optional; e.g. PostgreSQL schema, BigQuery dataset
-    "name": "orders",                // required
-    "object_type": "table"           // optional; descriptive string
-  }
-}
-```
+<!-- BEGIN GENERATED: fields-database-object -->
+`analitiq.contracts.endpoints.DatabaseObject` — closed (`additionalProperties: false`); required: `name`
+
+| Field | Required | Type | Default | Constraints |
+|---|---|---|---|---|
+| `catalog` | no | string \| null | `None` | `minLength=1` |
+| `schema` | no | string \| null | `None` | `minLength=1` |
+| `name` | **yes** | string | — | `minLength=1` |
+| `object_type` | no | string \| null | `None` | — |
+<!-- END GENERATED: fields-database-object -->
+
+Which provider concept lands in `catalog` and `schema` is dialect-specific — see
+the tables below.
 
 ## Identifier preservation
 
@@ -58,13 +61,12 @@ snapshot* of that object's shape and changes whenever a column does. One answers
 
 ## `name`
 
-Required. Provider-native object identifier. `minLength: 1`. No quoting
-or escaping — the value is the raw identifier as it appears in the
-catalog.
+The provider-native object identifier. No quoting or escaping — the value is the
+raw identifier as it appears in the catalog.
 
 ## `catalog`
 
-Optional. The outermost containment level when the dialect has one:
+The outermost containment level, when the dialect has one:
 
 | Dialect | what goes in `catalog` |
 |---|---|
@@ -77,7 +79,7 @@ Optional. The outermost containment level when the dialect has one:
 
 ## `schema`
 
-Optional. The intermediate namespace:
+The intermediate namespace:
 
 | Dialect | what goes in `schema` |
 |---|---|
@@ -88,7 +90,7 @@ Optional. The intermediate namespace:
 
 ## `object_type`
 
-Optional. Descriptive — **not** a closed enum. Common values:
+Descriptive — **not** a closed enum. Common values:
 `table`, `view`, `materialized_view`, `collection`, `external_table`,
 `stream`. The catalog stores this verbatim; downstream tools may inspect
 it for behavioral hints (e.g., "don't write to a view").

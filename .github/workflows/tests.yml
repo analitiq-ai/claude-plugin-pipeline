@@ -17,8 +17,11 @@ jobs:
         run: pip install -r requirements-dev.txt
       - name: Run tests
         run: pytest
-      # The suite already gates this via test_generated_blocks_in_sync; running
-      # the generator's own --check surfaces the offending diff directly in the
-      # log, so a contributor sees what to regenerate without reproducing locally.
+      # `if: always()` is load-bearing. test_generated_blocks_in_sync computes the
+      # same predicate as --check, so on a stale block pytest fails first; without
+      # this the step would be skipped in exactly the runs it exists to explain.
+      # Running it anyway prints the offending diff, so a contributor sees what to
+      # regenerate without reproducing locally.
       - name: Check generated prose blocks match the pinned contract
+        if: always()
         run: python3 src/scripts/gen_contract_docs.py --check
