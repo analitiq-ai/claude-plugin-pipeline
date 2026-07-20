@@ -114,19 +114,22 @@ def _restatements():
 
 def test_every_vocabulary_is_emitted_by_some_block():
     """An authoritative generated copy of each vocabulary must exist in the docs."""
-    emitted = "\n".join(
+    # Per block, not concatenated across all of them: a union would let a
+    # vocabulary's members be scattered over unrelated blocks and still "pass"
+    # while no single block actually presents the vocabulary to a reader.
+    bodies = [
         match.group("body")
         for path in G.generated_docs()
         for match in G._BLOCK_RE.finditer(path.read_text())
-    )
-    assert emitted.strip(), "no generated block content found — vacuous pass"
-    ticked = set(_TICKED.findall(emitted))
+    ]
+    assert any(b.strip() for b in bodies), "no generated block content — vacuous pass"
+    ticked_per_block = [set(_TICKED.findall(b)) for b in bodies]
     missing = sorted(
         key for key, vocab in G.published_vocabularies().items()
-        if not set(vocab["members"]) <= ticked
+        if not any(set(vocab["members"]) <= ticked for ticked in ticked_per_block)
     )
     assert not missing, (
-        f"vocabularies with no generated block anywhere in the docs: {missing}. "
+        f"vocabularies no single generated block presents in full: {missing}. "
         "Wire a block that emits them, or an agent has only hand-typed copies to read.")
 
 
@@ -142,6 +145,18 @@ def test_no_undeclared_vocabulary_restatement():
           "copy cannot drift), or add an entry to ALLOWED_RESTATEMENTS in this "
           "file saying why a hand-typed copy is correct there."
     )
+
+
+def test_exclusion_list_names_real_vocabularies():
+    """A stale exclusion key silently gates nothing — the dead-constant failure.
+
+    If a vocabulary is renamed or dropped upstream, its exclusion must not linger
+    as an entry that quietly exempts a key nobody publishes any more.
+    """
+    unknown = sorted(EXCLUDED_FROM_PROSE_GATE - set(G.published_vocabularies()))
+    assert not unknown, (
+        f"EXCLUDED_FROM_PROSE_GATE names vocabularies the contract does not "
+        f"publish: {unknown}. Remove them — they exempt nothing.")
 
 
 def test_allow_list_has_no_stale_entries():

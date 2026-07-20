@@ -29,21 +29,24 @@ Pick the mode from the user's intent:
 - `pipeline_slug` (required) — directory name matching `^[a-z0-9][a-z0-9_-]*$`;
   immutable; the on-disk pipeline directory (not the document's UUID identity).
 - `replication_method` (optional, default per source capability) — a member of
-  the replication vocabulary below. `cursor_field` is required when the method is
-  incremental.
+  the replication vocabulary in §Closed vocabularies. `cursor_field` is required
+  when the method is incremental.
 - `write_mode` (optional, default per destination capability) — for a database
-  destination, a member of the write-mode vocabulary below (upsert additionally
-  requires `conflict_keys`); for an API destination, one of the endpoint's
-  `operations.write` keys, which no contract enum can enumerate.
-- `schedule_type` (optional, default per the schedule vocabulary below).
+  destination, a member of the write-mode vocabulary in §Closed vocabularies
+  (upsert additionally requires `conflict_keys`); for an API destination, one of
+  the endpoint's `operations.write` keys, which no contract enum can enumerate.
+- `schedule_type` (optional) — a member of the schedule vocabulary in
+  §Closed vocabularies. Omit it and the contract's own default applies.
 - `previous_release_path` (optional) — path to the prior released directory
   of this pipeline. Required for the drift step.
 
 (In **edit** mode, collect instead the target artifact and the change; see "Edit
 mode".)
 
-Every closed vocabulary the inputs above resolve against, straight from the
-pinned contract. Map the user's phrasing onto one of these — `references/enum-mappers.md`
+## Closed vocabularies
+
+Every vocabulary the inputs above resolve against, straight from the pinned
+contract. Map the user's phrasing onto one of these — `references/enum-mappers.md`
 carries the phrasing tables — and halt rather than inventing a member:
 
 <!-- BEGIN GENERATED: enum-vocabulary -->
