@@ -43,6 +43,10 @@ Pick the mode from the user's intent:
 (In **edit** mode, collect instead the target artifact and the change; see "Edit
 mode".)
 
+If a required input is missing, ask for it. Ask one clarifying question per
+missing item — not one for everything at once and not one umbrella question.
+Proceed once the user answers.
+
 ## Closed vocabularies
 
 Every vocabulary the inputs above resolve against, straight from the pinned
@@ -64,9 +68,6 @@ carries the phrasing tables — and halt rather than inventing a member:
 | `…endpoint_ref.scope` | `connector`, `connection` | `analitiq.contracts.stream.SCOPE_CONNECTOR` / `SCOPE_CONNECTION` |
 <!-- END GENERATED: enum-vocabulary -->
 
-If a required input is missing, ask for it. Ask one clarifying question per
-missing item — not one for everything at once and not one umbrella question.
-Proceed once the user answers.
 
 ## Required reading
 

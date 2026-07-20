@@ -55,8 +55,9 @@ ALLOWED_RESTATEMENTS = {
     ("skills/pipeline-builder/references/enum-mappers.md", "write.mode"):
         "same: the mapper table's right-hand column IS the member",
     ("skills/pipeline-spec/spec-schedule.md", "schedule.type"):
-        "one `## type: <member>` section per member — the document's structure is "
-        "the enumeration, and each section explains that member's fields",
+        "the §`timezone` paragraph names all three types while explaining that "
+        "timezone is validated for every one of them — an incidental co-mention, "
+        "not a copy of the vocabulary",
     ("skills/pipeline-spec/spec-schedule.md", "status"):
         "the status->scheduling-effect table; the rows explain behaviour per "
         "member, which the contract does not express",
@@ -66,16 +67,21 @@ ALLOWED_RESTATEMENTS = {
         "per-member semantics (which types take a `value`), sitting beside the "
         "generated fields-validation-rule block",
     ("agents/stream-creator.md", "write.mode"):
-        "states the conflict_keys rule (ADV-STRM-011), which distinguishes the "
-        "two modes and so must name both",
+        "§Process and §Hard rules both state the conflict_keys rule "
+        "(ADV-STRM-011), which distinguishes the two modes and so must name both. "
+        "NB an entry exempts the whole (file, vocabulary) pair, so a third "
+        "restatement in this file would not be reported",
 }
 
 # Vocabularies whose members are ordinary domain nouns, so "all members present"
 # carries no signal. `endpoint_ref.scope` is {connector, connection}: both words
-# appear in backticks throughout these docs for unrelated reasons, and any doc
-# that contrasts the two ref shapes trips the detector. Allow-listing file by file
-# would grow without bound and teach people to append rather than think.
-# Still covered by test_every_vocabulary_is_emitted_by_some_block.
+# appear in backticks throughout these docs for unrelated reasons, so a full-set
+# match means nothing here. Measured with the exclusion lifted, exactly two
+# sections trip — stream-creator.md §Process and stream-spec/SKILL.md — and both
+# are incidental co-mentions contrasting the two ref shapes. Excluded rather than
+# allow-listed because the signal is absent for this vocabulary, not because the
+# two sites are hard to enumerate. Still covered by
+# test_every_vocabulary_is_emitted_by_some_block.
 EXCLUDED_FROM_PROSE_GATE = {"endpoint_ref.scope"}
 
 _TICKED = re.compile(r"`([A-Za-z_][A-Za-z0-9_]*)`")
@@ -110,7 +116,11 @@ def _restatements():
     }
     found = []
     for path in sorted(G.DOCS_ROOT.rglob("*.md")):
-        outside_blocks = G._BLOCK_RE.sub("", path.read_text())
+        # Replace each block with its own newline count rather than "": keeps
+        # reported line numbers aligned with the real file, and stops prose that
+        # abuts a block from being merged into one section.
+        outside_blocks = G._BLOCK_RE.sub(
+            lambda m: "\n" * m.group(0).count("\n"), path.read_text())
         rel = path.relative_to(G.DOCS_ROOT).as_posix()
         for start, section in _sections(outside_blocks):
             ticked = set(_TICKED.findall(section))
@@ -143,12 +153,14 @@ def test_every_vocabulary_is_emitted_by_some_block():
 
 def test_no_undeclared_vocabulary_restatement():
     """A hand-typed copy of a whole vocabulary must be a recorded decision."""
+    found = _restatements()
     undeclared = sorted(
-        {(doc, key) for doc, key, _ in _restatements()} - set(ALLOWED_RESTATEMENTS)
+        {(doc, key, line) for doc, key, line in found
+         if (doc, key) not in ALLOWED_RESTATEMENTS}
     )
     assert not undeclared, (
         "these docs restate a full closed vocabulary outside any generated block:\n"
-        + "\n".join(f"  {doc}  [{key}]" for doc, key in undeclared)
+        + "\n".join(f"  {doc}:{line}  [{key}]" for doc, key, line in undeclared)
         + "\n\nEither wire a generated block that emits it (preferred — then the "
           "copy cannot drift), or add an entry to ALLOWED_RESTATEMENTS in this "
           "file saying why a hand-typed copy is correct there."
