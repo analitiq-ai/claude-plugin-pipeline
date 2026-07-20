@@ -15,8 +15,9 @@ Two checks close that, and it is worth being precise about which does the work:
 2. `test_no_undeclared_vocabulary_restatement` — the heuristic. It finds a doc
    that names a whole closed vocabulary outside a block, which must then be
    declared in ALLOWED_RESTATEMENTS with a reason and its exact expected member
-   set. It catches a *correct* copy appearing somewhere new, and — because the
-   declared set is asserted exactly — any later drift inside a copy we tolerate.
+   set. It catches a *correct, complete* copy appearing somewhere new, and — via
+   the staleness check — an allow-listed copy that LOSES a member. It does not
+   catch a copy that gains one; see the coverage table below.
 
 Why the manifest is primary. The heuristic is a full-set match, so it is blind to
 drift by *omission or rename*: a hand-typed table missing a member is not a
@@ -32,7 +33,7 @@ Detection limits of the heuristic, stated so nobody over-trusts it:
     seen. `FENCED_RESTATEMENTS` records the ones that exist today.
   * scope is `*.md` under `src/`.
   * `_sections()` does not track fenced blocks, so a column-0 `#` inside a fence
-    would split a section early. Zero occurrences across the 39 fences in `src/`
+    would split a section early. Zero occurrences across the 26 fenced blocks in `src/`
     today; the failure mode is a missed detection, never a false one.
 
 What each check does and does not cover, measured:
@@ -40,10 +41,16 @@ What each check does and does not cover, measured:
   | drift                                          | caught by                |
   |------------------------------------------------|--------------------------|
   | a generated block deleted from a doc            | REQUIRED_BLOCKS          |
-  | a new hand-typed copy appearing                 | undeclared / count check |
+  | a new hand-typed FULL copy appearing            | undeclared / count check |
+  | a new hand-typed SUBSET copy appearing          | NOTHING — see below      |
   | an allow-listed copy DROPPING a member          | staleness check          |
   | the contract moving under a declared member set | contract-match check     |
   | an allow-listed copy INVENTING a member in place| NOTHING — see below      |
+
+The subset row is the same blind spot as the invention row, from the other side:
+detection needs the whole vocabulary present, so a new doc asserting
+`replication.method` is only `full_refresh` is invisible. REQUIRED_BLOCKS is what
+covers the docs that matter; a brand-new doc is required to carry nothing.
 
 One more thing this gate does not cover at all, by design: it polices closed
 VOCABULARIES and block presence, not every contract fact prose can express.
@@ -137,7 +144,7 @@ ALLOWED_RESTATEMENTS = {
          "per-member semantics (which types take a `value`)"),
     ("agents/stream-creator.md", "write.mode"):
         (2, {"insert", "upsert"},
-         "§`Proce§` and §`Hard rules` both state the conflict_keys rule "
+         "§`Process` and §`Hard rules` both state the conflict_keys rule "
          "(ADV-STRM-011), which distinguishes the two modes and so names both"),
 }
 
@@ -318,16 +325,24 @@ def test_no_undeclared_vocabulary_restatement():
 
 
 def test_allow_listed_restatements_still_match_the_contract():
-    """An allow-listed copy must name exactly the contract's members.
+    """The DECLARED member set must still equal the contract's.
 
-    Without this, an entry is blanket immunity: the doc could invent a member or
-    drop one and stay green, which is precisely the drift the gate exists for.
+    Note what this does and does not read: it compares the set written in
+    ALLOWED_RESTATEMENTS to the published contract. It never opens the document.
+    So it catches the contract moving out from under a declaration — a member
+    renamed or retired upstream — and nothing about the prose itself. An
+    allow-listed copy that LOSES a member is caught by
+    test_allow_list_has_no_stale_entries (the full set stops matching); one that
+    GAINS an invented member is caught by nothing, which the module docstring's
+    coverage table states outright.
     """
     published = G.published_vocabularies()
+    # Unknown keys are test_declared_lists_name_real_vocabularies' business —
+    # indexing them here would raise a bare KeyError and mask its message.
     wrong = {
         key: (declared, set(published[key[1]]["members"]))
         for key, (_n, declared, _why) in ALLOWED_RESTATEMENTS.items()
-        if declared != set(published[key[1]]["members"])
+        if key[1] in published and declared != set(published[key[1]]["members"])
     }
     assert not wrong, (
         f"allow-listed member sets no longer match the contract (declared, published): "
@@ -361,6 +376,24 @@ def test_exclusion_list_names_real_vocabularies():
     assert not unknown, (
         f"EXCLUDED_FROM_PROSE_GATE names vocabularies the contract does not "
         f"publish: {unknown}. Remove them — they exempt nothing.")
+
+
+def test_declared_lists_name_real_vocabularies():
+    """ALLOWED_/FENCED_RESTATEMENTS must name published vocabularies.
+
+    Without this a renamed key surfaces as a bare KeyError from the contract-match
+    test. Every other failure in this file carries an actionable message; these
+    two lists should not be the exception.
+    """
+    published = set(G.published_vocabularies())
+    unknown = sorted(
+        {key for _doc, key in ALLOWED_RESTATEMENTS} - published
+        | {key for _doc, key in FENCED_RESTATEMENTS} - published
+    )
+    assert not unknown, (
+        f"declared restatements name vocabularies the contract does not publish: "
+        f"{unknown}. The contract renamed or retired them — check the docs those "
+        "entries exempt before editing the lists.")
 
 
 def test_allow_list_has_no_stale_entries():
