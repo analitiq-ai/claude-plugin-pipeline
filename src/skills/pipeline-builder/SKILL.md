@@ -64,8 +64,8 @@ carries the phrasing tables — and halt rather than inventing a member:
 | `stream…validate.rules[].type` | `required`, `not_null`, `min_length`, `max_length`, `pattern`, `range`, `in_list` | `analitiq.contracts.stream.ValidationRule.type` |
 | `stream.source.replication.method` | `full_refresh`, `incremental` | discriminated union `analitiq.contracts.stream.Replication` |
 | `stream.source.database_pagination.type` | `offset`, `keyset` | discriminated union `analitiq.contracts.stream.DatabasePagination` |
+| `…endpoint_ref.scope` | `connector`, `connection` | discriminated union `analitiq.contracts.stream.EndpointRef` |
 | `stream.destinations[].write.mode` (database) | `insert`, `upsert` | `ADV-STRM-013` (API modes are endpoint-declared, so the field itself is `str`) |
-| `…endpoint_ref.scope` | `connector`, `connection` | `analitiq.contracts.stream.SCOPE_CONNECTOR` / `SCOPE_CONNECTION` |
 <!-- END GENERATED: enum-vocabulary -->
 
 

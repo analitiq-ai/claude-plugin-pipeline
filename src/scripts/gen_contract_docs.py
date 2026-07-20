@@ -533,9 +533,21 @@ def published_vocabularies() -> dict[str, dict]:
     vocabularies: dict[str, dict] = {}
 
     def add(key, label, members, published_as):
+        # Empty is not the only bad state. A duplicate key would silently drop the
+        # earlier vocabulary from the table AND from every gate iterating this
+        # dict; a non-string member (an Optional[Literal] slipping through the
+        # union path) would render as "typing.Literal[...]" and could never match
+        # prose. Both are wrong-not-empty, so guard them here where every caller
+        # inherits the check.
         if not members:
             raise RuntimeError(
                 f"{key!r} exposed no members; it is no longer a closed vocabulary")
+        if key in vocabularies:
+            raise RuntimeError(f"duplicate vocabulary key {key!r}")
+        if not all(isinstance(m, str) for m in members):
+            raise RuntimeError(
+                f"{key!r} yielded non-string members {members!r}; the annotation "
+                "is no longer a plain string Literal")
         vocabularies[key] = {"label": label, "members": list(members),
                              "published_as": published_as}
 
@@ -568,6 +580,8 @@ def published_vocabularies() -> dict[str, dict]:
          stream.Replication, "Replication", "method"),
         ("database_pagination.type", "`stream.source.database_pagination.type`",
          stream.DatabasePagination, "DatabasePagination", "type"),
+        ("endpoint_ref.scope", "`…endpoint_ref.scope`",
+         stream.EndpointRef, "EndpointRef", "scope"),
     ):
         variants = get_args(get_args(union)[0])
         add(key, label,
@@ -580,10 +594,6 @@ def published_vocabularies() -> dict[str, dict]:
     add("write.mode", "`stream.destinations[].write.mode` (database)",
         sorted(stream._DB_WRITE_MODES),
         "`ADV-STRM-013` (API modes are endpoint-declared, so the field itself is `str`)")
-
-    add("endpoint_ref.scope", "`…endpoint_ref.scope`",
-        [stream.SCOPE_CONNECTOR, stream.SCOPE_CONNECTION],
-        "`analitiq.contracts.stream.SCOPE_CONNECTOR` / `SCOPE_CONNECTION`")
 
     return vocabularies
 

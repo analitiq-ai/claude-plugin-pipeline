@@ -1,100 +1,152 @@
 """Gate the prose *outside* generated blocks (issue #24).
 
 `test_generated_blocks_in_sync` verifies the contents of every marked region.
-Nothing verified that a fact was inside a region at all — delete a marker pair,
-hand-type a wrong vocabulary in its place, and the suite stayed green.
+Nothing verified a fact was **in** a region — delete a marker pair, hand-type a
+wrong vocabulary in its place, and the suite stayed green.
 
-This closes that. For every closed vocabulary the contract owns:
+Two checks close that, and it is worth being precise about which does the work:
 
-  * it must be emitted by at least one generated block, so an authoritative copy
-    exists somewhere an agent will read;
-  * any doc that restates the *whole* vocabulary outside a block must be listed
-    in ALLOWED_RESTATEMENTS with a reason.
+1. `test_docs_carry_their_required_blocks` — the load-bearing one. Every doc must
+   still carry the blocks it is supposed to carry. Deleting a block from a doc is
+   the actual #24 scenario, and no content heuristic can catch it reliably,
+   because what replaces the block is by definition wrong in an unpredictable
+   way. Pinning the manifest catches it regardless of what the replacement says.
 
-The allow-list is the point. Naming members is often legitimate — a doc that
-explains what each `schedule.type` means has to say `manual`, `interval` and
-`cron`. What must not happen silently is a *new* hand-typed copy of a vocabulary
-appearing with nobody having decided it should be hand-typed. A new restatement
-fails here until someone either wires a block or writes down why not.
+2. `test_no_undeclared_vocabulary_restatement` — the heuristic. It finds a doc
+   that names a whole closed vocabulary outside a block, which must then be
+   declared in ALLOWED_RESTATEMENTS with a reason and its exact expected member
+   set. It catches a *correct* copy appearing somewhere new, and — because the
+   declared set is asserted exactly — any later drift inside a copy we tolerate.
 
-Detection: members must appear in backticks, and all of them within one markdown
-section. A partial mention ("author `upsert` when the user wants merge
-semantics") is guidance, not a restatement, and does not trip it.
+Why the manifest is primary. The heuristic is a full-set match, so it is blind to
+drift by *omission or rename*: a hand-typed table missing a member is not a
+superset and does not match. Loosening it to "names >= 2 members" would fire on
+ordinary guidance that contrasts two members, which this prose does constantly.
+So the heuristic cannot be the gate for the headline case, and is not asked to be.
 
-Known limit, deliberate: a restatement written WITHOUT backticks is not detected.
-Dropping the backtick requirement is not an option — members include `in`,
-`range`, `pattern`, `required`, `fail` and `skip`, ordinary English words that
-appear constantly in this prose, so an un-ticked scan would be almost all false
-positives. The house style backticks contract values, so a restatement that
-matches the surrounding style is caught; one that does not is not. This gate
-raises the cost of silent drift, it does not make it impossible.
+Detection limits of the heuristic, stated so nobody over-trusts it:
+  * members must appear in backticks. Dropping that is not an option — members
+    include `in`, `range`, `pattern`, `required`, `fail` and `skip`, ordinary
+    words that saturate this prose.
+  * a restatement inside a fenced code block using bare (unticked) members is not
+    seen. `FENCED_RESTATEMENTS` records the ones that exist today.
+  * scope is `*.md` under `src/`.
 """
 from __future__ import annotations
 
 import re
 import sys
+from collections import Counter
 from pathlib import Path
 
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src" / "scripts"))
-import gen_contract_docs as G  # noqa: E402
 
 pytest.importorskip("analitiq.validator",
                     reason="requires: pip install -r requirements-dev.txt")
+import gen_contract_docs as G  # noqa: E402
 
-# (doc path relative to src/, vocabulary key) -> why a hand-typed copy is correct here.
-# Every entry is a deliberate decision, not a backlog.
-ALLOWED_RESTATEMENTS = {
-    ("skills/pipeline-builder/references/enum-mappers.md", "schedule.type"):
-        "the phrasing->member mapping tables must name each target member; the "
-        "authoritative list is the enum-vocabulary block at the top of the file",
-    ("skills/pipeline-builder/references/enum-mappers.md", "replication.method"):
-        "same: the mapper table's right-hand column IS the member",
-    ("skills/pipeline-builder/references/enum-mappers.md", "write.mode"):
-        "same: the mapper table's right-hand column IS the member",
-    ("skills/pipeline-spec/spec-schedule.md", "schedule.type"):
-        "the §`timezone` paragraph names all three types while explaining that "
-        "timezone is validated for every one of them — an incidental co-mention, "
-        "not a copy of the vocabulary",
-    ("skills/pipeline-spec/spec-schedule.md", "status"):
-        "the status->scheduling-effect table; the rows explain behaviour per "
-        "member, which the contract does not express",
-    ("skills/pipeline-spec/spec-streams-and-status.md", "status"):
-        "the status->runnability table; same reason",
-    ("skills/stream-spec/spec-validation-rules.md", "validation_rule.type"):
-        "per-member semantics (which types take a `value`), sitting beside the "
-        "generated fields-validation-rule block",
-    ("agents/stream-creator.md", "write.mode"):
-        "§Process and §Hard rules both state the conflict_keys rule "
-        "(ADV-STRM-011), which distinguishes the two modes and so must name both. "
-        "NB an entry exempts the whole (file, vocabulary) pair, so a third "
-        "restatement in this file would not be reported",
+# Which generated blocks each doc must carry. Deleting one is issue #24's exact
+# scenario, so this manifest — not a content heuristic — is what catches it.
+# Plugin policy (which doc shows what), not a contract fact, and asserted against
+# reality in both directions so it cannot rot.
+REQUIRED_BLOCKS = {
+    "skills/connection-spec/SKILL.md": {"fields-connection", "schema-urls"},
+    "skills/connection-spec/spec-envelope.md": {"secret-ref-grammar"},
+    "skills/endpoint-spec/SKILL.md": {"fields-database-endpoint", "schema-urls"},
+    "skills/endpoint-spec/spec-columns.md": {"advisory-endpoint", "arrow-types", "fields-column"},
+    "skills/endpoint-spec/spec-database-object.md": {"endpoint-id-derivation", "fields-database-object"},
+    "skills/pipeline-builder/SKILL.md": {"enum-vocabulary"},
+    "skills/pipeline-builder/references/enum-mappers.md": {"enum-vocabulary"},
+    "skills/pipeline-builder/references/identity-and-versioning.md": {"shared-vocabulary"},
+    "skills/pipeline-builder/references/io-contracts.md": {"validator-ids"},
+    "skills/pipeline-builder/references/schema-hosts.md": {"schema-urls"},
+    "skills/pipeline-spec/SKILL.md": {"advisory-pipeline", "fields-pipeline", "schema-urls"},
+    "skills/pipeline-spec/spec-connections.md": {"fields-pipeline-connections"},
+    "skills/pipeline-spec/spec-engine-runtime.md": {
+        "fields-batching", "fields-engine", "fields-error-handling", "fields-logging", "fields-runtime"},
+    "skills/pipeline-spec/spec-schedule.md": {"fields-schedule"},
+    "skills/stream-spec/SKILL.md": {
+        "advisory-stream", "enum-vocabulary", "fields-stream", "schema-urls"},
+    "skills/stream-spec/spec-destinations.md": {
+        "fields-stream-destination", "fields-stream-execution", "fields-stream-write"},
+    "skills/stream-spec/spec-endpoint-refs.md": {
+        "endpoint-id-derivation", "fields-connection-endpoint-ref", "fields-connector-endpoint-ref"},
+    "skills/stream-spec/spec-filter-operators.md": {"filter-operators"},
+    "skills/stream-spec/spec-mapping.md": {
+        "fields-assignment-target", "fields-assignment-value", "fields-stream-mapping"},
+    "skills/stream-spec/spec-source.md": {"fields-stream-source"},
+    "skills/stream-spec/spec-validation-rules.md": {"fields-validation-rule"},
 }
 
-# Vocabularies whose members are ordinary domain nouns, so "all members present"
-# carries no signal. `endpoint_ref.scope` is {connector, connection}: both words
-# appear in backticks throughout these docs for unrelated reasons, so a full-set
-# match means nothing here. Measured with the exclusion lifted, exactly two
-# sections trip — stream-creator.md §Process and stream-spec/SKILL.md — and both
-# are incidental co-mentions contrasting the two ref shapes. Excluded rather than
-# allow-listed because the signal is absent for this vocabulary, not because the
-# two sites are hard to enumerate. Still covered by
-# test_every_vocabulary_is_emitted_by_some_block.
-EXCLUDED_FROM_PROSE_GATE = {"endpoint_ref.scope"}
+# (doc, vocabulary) -> (occurrences, expected members, why a hand-typed copy is right here).
+# The member set is recorded so an allow-listed copy cannot quietly gain an
+# invented member or lose a real one; the count so a second copy cannot hide
+# behind the first. An entry is a decision, not a backlog.
+ALLOWED_RESTATEMENTS = {
+    ("skills/pipeline-builder/references/enum-mappers.md", "schedule.type"):
+        (1, {"manual", "interval", "cron"},
+         "the phrasing->member mapping table's right-hand column IS the member"),
+    ("skills/pipeline-builder/references/enum-mappers.md", "replication.method"):
+        (1, {"full_refresh", "incremental"}, "same: mapper table target column"),
+    ("skills/pipeline-builder/references/enum-mappers.md", "write.mode"):
+        (1, {"insert", "upsert"}, "same: mapper table target column"),
+    ("skills/pipeline-spec/spec-schedule.md", "schedule.type"):
+        (1, {"manual", "interval", "cron"},
+         "the §`timezone` section names all three types while explaining that "
+         "timezone is validated for every one of them — an incidental co-mention"),
+    ("skills/pipeline-spec/spec-schedule.md", "status"):
+        (1, {"draft", "active", "inactive"},
+         "the status->scheduling-effect table explains behaviour per member"),
+    ("skills/pipeline-spec/spec-streams-and-status.md", "status"):
+        (1, {"draft", "active", "inactive"}, "the status->runnability table"),
+    ("skills/stream-spec/spec-validation-rules.md", "validation_rule.type"):
+        (1, {"required", "not_null", "min_length", "max_length", "pattern", "range", "in_list"},
+         "per-member semantics (which types take a `value`)"),
+    ("agents/stream-creator.md", "write.mode"):
+        (2, {"insert", "upsert"},
+         "§`Proce§` and §`Hard rules` both state the conflict_keys rule "
+         "(ADV-STRM-011), which distinguishes the two modes and so names both"),
+}
+
+# Restatements inside fenced code blocks using bare, unticked members. The
+# heuristic cannot see these (a fence body is illustrative JSON, where quoting
+# every member would be wrong), so they are recorded explicitly rather than left
+# to look like clean prose.
+FENCED_RESTATEMENTS = {
+    ("skills/pipeline-builder/references/io-contracts.md", "replication.method"):
+        "the PipelineFacts jsonc example annotates the field with its vocabulary",
+    ("skills/pipeline-builder/references/io-contracts.md", "schedule.type"):
+        "same example, schedule field",
+    ("skills/pipeline-builder/references/io-contracts.md", "write.mode"):
+        "the DriftVerdict example shows a write_mode_changed entry, which needs a "
+        "concrete from/to pair to illustrate the shape",
+}
+
+# Vocabularies whose members are ordinary domain nouns, so a full-set match
+# carries no signal. Keyed to a written reason, like the allow-list — the gate's
+# escape hatch must cost as much to widen as the thing it gates.
+EXCLUDED_FROM_PROSE_GATE = {
+    "endpoint_ref.scope":
+        "members are `connector` and `connection`, ordinary nouns that appear in "
+        "backticks throughout for unrelated reasons. Measured with the exclusion "
+        "lifted, exactly two sections trip and both are incidental co-mentions "
+        "contrasting the two ref shapes. Still covered by the emission test.",
+}
 
 _TICKED = re.compile(r"`([A-Za-z_][A-Za-z0-9_]*)`")
+_FENCE = re.compile(r"^```.*?^```", re.DOTALL | re.MULTILINE)
 
 
 def _sections(text: str):
-    """Yield (start_line, text) for each markdown section — heading to next heading.
+    """Yield (start_line, text) per markdown section — heading to next heading.
 
-    The section, not the paragraph, is the unit. A paragraph unit is evaded by
+    The section, not the paragraph, is the unit: a paragraph unit is evaded by
     spreading members over consecutive paragraphs under one heading, which reads
-    as a single enumeration to a human. Measured on this repo, section scope finds
-    exactly the same restatements as paragraph scope, so the wider net costs
-    nothing in false positives while closing that gap.
+    as a single enumeration. Measured on this repo, section scope finds exactly
+    the same restatements, so the wider net costs nothing in false positives.
     """
     current, start = [], 1
     for lineno, line in enumerate(text.splitlines(), 1):
@@ -106,23 +158,27 @@ def _sections(text: str):
         yield start, "\n".join(current)
 
 
-def _restatements():
-    """Every (doc, vocab, line) where a full vocabulary appears outside a block."""
-    vocabularies = {
+def _gated_vocabularies():
+    return {
         key: set(vocab["members"])
         for key, vocab in G.published_vocabularies().items()
         # A single-member "vocabulary" would match almost any mention.
         if len(vocab["members"]) > 1 and key not in EXCLUDED_FROM_PROSE_GATE
     }
+
+
+def _restatements():
+    """Every (doc, vocab, line) where a full vocabulary appears outside a block."""
+    vocabularies = _gated_vocabularies()
     found = []
     for path in sorted(G.DOCS_ROOT.rglob("*.md")):
         # Replace each block with its own newline count rather than "": keeps
         # reported line numbers aligned with the real file, and stops prose that
         # abuts a block from being merged into one section.
-        outside_blocks = G._BLOCK_RE.sub(
-            lambda m: "\n" * m.group(0).count("\n"), path.read_text())
+        outside = G._BLOCK_RE.sub(lambda m: "\n" * m.group(0).count("\n"),
+                                  path.read_text())
         rel = path.relative_to(G.DOCS_ROOT).as_posix()
-        for start, section in _sections(outside_blocks):
+        for start, section in _sections(outside):
             ticked = set(_TICKED.findall(section))
             for key, members in vocabularies.items():
                 if members <= ticked:
@@ -130,50 +186,148 @@ def _restatements():
     return found
 
 
+def test_docs_carry_their_required_blocks():
+    """The #24 scenario: a block deleted from the doc that is supposed to carry it.
+
+    No content check can catch this reliably — whatever replaces the block is
+    wrong in an unpredictable way. Pinning which doc carries which block does.
+    """
+    actual = {}
+    for path in G.generated_docs():
+        actual[path.relative_to(G.DOCS_ROOT).as_posix()] = {
+            m.group("id") for m in G._BLOCK_RE.finditer(path.read_text())
+        }
+    missing = {
+        doc: sorted(required - actual.get(doc, set()))
+        for doc, required in REQUIRED_BLOCKS.items()
+        if required - actual.get(doc, set())
+    }
+    assert not missing, (
+        f"docs no longer carry blocks they are required to: {missing}. "
+        "If a block was deliberately moved, update REQUIRED_BLOCKS; otherwise a "
+        "generated fact has been replaced by hand-typed prose.")
+
+
+def test_required_blocks_manifest_is_current():
+    """The manifest must describe reality, or it silently stops requiring things."""
+    actual = {}
+    for path in G.generated_docs():
+        actual[path.relative_to(G.DOCS_ROOT).as_posix()] = {
+            m.group("id") for m in G._BLOCK_RE.finditer(path.read_text())
+        }
+    unlisted = {
+        doc: sorted(ids - REQUIRED_BLOCKS.get(doc, set()))
+        for doc, ids in actual.items() if ids - REQUIRED_BLOCKS.get(doc, set())
+    }
+    assert not unlisted, (
+        f"docs carry blocks the manifest does not require: {unlisted}. Add them, "
+        "so deleting one later is caught.")
+    stale = sorted(set(REQUIRED_BLOCKS) - set(actual))
+    assert not stale, f"REQUIRED_BLOCKS names docs with no generated block: {stale}"
+
+
 def test_every_vocabulary_is_emitted_by_some_block():
     """An authoritative generated copy of each vocabulary must exist in the docs."""
-    # Per block, not concatenated across all of them: a union would let a
-    # vocabulary's members be scattered over unrelated blocks and still "pass"
-    # while no single block actually presents the vocabulary to a reader.
     bodies = [
         match.group("body")
         for path in G.generated_docs()
         for match in G._BLOCK_RE.finditer(path.read_text())
     ]
     assert any(b.strip() for b in bodies), "no generated block content — vacuous pass"
+    # Per block, not concatenated: a union would let a vocabulary's members be
+    # scattered over unrelated blocks and still "pass" while no single block
+    # presents it to a reader.
     ticked_per_block = [set(_TICKED.findall(b)) for b in bodies]
     missing = sorted(
         key for key, vocab in G.published_vocabularies().items()
-        if not any(set(vocab["members"]) <= ticked for ticked in ticked_per_block)
+        if not any(set(vocab["members"]) <= t for t in ticked_per_block)
     )
     assert not missing, (
         f"vocabularies no single generated block presents in full: {missing}. "
         "Wire a block that emits them, or an agent has only hand-typed copies to read.")
 
 
+def test_every_member_is_matchable_by_the_detector():
+    """The gate silently assumes every member is a backtickable identifier.
+
+    A member containing `-` or `.` would be invisible to `_TICKED`, and the
+    emission test above would then report a phantom missing block. Fail on the
+    real cause instead.
+    """
+    unmatchable = {
+        key: [m for m in vocab["members"] if not _TICKED.fullmatch(f"`{m}`")]
+        for key, vocab in G.published_vocabularies().items()
+        if any(not _TICKED.fullmatch(f"`{m}`") for m in vocab["members"])
+    }
+    assert not unmatchable, (
+        f"published members the detector cannot match: {unmatchable}. Widen "
+        "_TICKED — otherwise these are silently ungated.")
+
+
 def test_no_undeclared_vocabulary_restatement():
     """A hand-typed copy of a whole vocabulary must be a recorded decision."""
-    found = _restatements()
-    undeclared = sorted(
-        {(doc, key, line) for doc, key, line in found
-         if (doc, key) not in ALLOWED_RESTATEMENTS}
-    )
+    counts = Counter((doc, key) for doc, key, _ in _restatements())
+    lines = {(doc, key): line for doc, key, line in _restatements()}
+    undeclared = sorted(k for k in counts if k not in ALLOWED_RESTATEMENTS)
     assert not undeclared, (
         "these docs restate a full closed vocabulary outside any generated block:\n"
-        + "\n".join(f"  {doc}:{line}  [{key}]" for doc, key, line in undeclared)
+        + "\n".join(f"  {doc}:{lines[(doc, key)]}  [{key}]" for doc, key in undeclared)
         + "\n\nEither wire a generated block that emits it (preferred — then the "
           "copy cannot drift), or add an entry to ALLOWED_RESTATEMENTS in this "
           "file saying why a hand-typed copy is correct there."
     )
+    # A second copy must not hide behind the first entry.
+    wrong_count = {
+        k: (counts[k], expected)
+        for k, (expected, _members, _why) in ALLOWED_RESTATEMENTS.items()
+        if counts.get(k, 0) != expected
+    }
+    assert not wrong_count, (
+        f"allow-listed restatement count changed (found, expected): {wrong_count}. "
+        "A new hand-typed copy appeared, or one was removed.")
+
+
+def test_allow_listed_restatements_still_match_the_contract():
+    """An allow-listed copy must name exactly the contract's members.
+
+    Without this, an entry is blanket immunity: the doc could invent a member or
+    drop one and stay green, which is precisely the drift the gate exists for.
+    """
+    published = G.published_vocabularies()
+    wrong = {
+        key: (declared, set(published[key[1]]["members"]))
+        for key, (_n, declared, _why) in ALLOWED_RESTATEMENTS.items()
+        if declared != set(published[key[1]]["members"])
+    }
+    assert not wrong, (
+        f"allow-listed member sets no longer match the contract (declared, published): "
+        f"{wrong}. The doc's hand-typed copy has drifted, or the contract moved — "
+        "check the doc before updating the entry.")
+
+
+def test_fenced_restatements_are_declared():
+    """Bare-member restatements inside fenced examples, recorded not hidden."""
+    vocabularies = _gated_vocabularies()
+    found = set()
+    for path in sorted(G.DOCS_ROOT.rglob("*.md")):
+        outside = G._BLOCK_RE.sub("", path.read_text())
+        rel = path.relative_to(G.DOCS_ROOT).as_posix()
+        for fence in _FENCE.findall(outside):
+            words = set(re.findall(r"[A-Za-z_][A-Za-z0-9_]*", fence))
+            for key, members in vocabularies.items():
+                if members <= words:
+                    found.add((rel, key))
+    undeclared = sorted(found - set(FENCED_RESTATEMENTS))
+    assert not undeclared, (
+        f"fenced code blocks restate a vocabulary without being declared: {undeclared}. "
+        "Add to FENCED_RESTATEMENTS with a reason, or rewrite the example.")
+    stale = sorted(set(FENCED_RESTATEMENTS) - found)
+    assert not stale, f"FENCED_RESTATEMENTS entries that no longer match: {stale}"
 
 
 def test_exclusion_list_names_real_vocabularies():
-    """A stale exclusion key silently gates nothing — the dead-constant failure.
-
-    If a vocabulary is renamed or dropped upstream, its exclusion must not linger
-    as an entry that quietly exempts a key nobody publishes any more.
-    """
-    unknown = sorted(EXCLUDED_FROM_PROSE_GATE - set(G.published_vocabularies()))
+    """A stale exclusion key silently gates nothing — the dead-constant failure."""
+    unknown = sorted(set(EXCLUDED_FROM_PROSE_GATE) - set(G.published_vocabularies()))
     assert not unknown, (
         f"EXCLUDED_FROM_PROSE_GATE names vocabularies the contract does not "
         f"publish: {unknown}. Remove them — they exempt nothing.")
@@ -184,5 +338,8 @@ def test_allow_list_has_no_stale_entries():
     actual = {(doc, key) for doc, key, _ in _restatements()}
     stale = sorted(set(ALLOWED_RESTATEMENTS) - actual)
     assert not stale, (
-        f"ALLOWED_RESTATEMENTS entries no longer match any restatement: {stale}. "
-        "Remove them — the exemption they grant is now invisible and unearned.")
+        f"ALLOWED_RESTATEMENTS entries match no restatement: {stale}.\n"
+        "Two possible causes, and they need opposite fixes:\n"
+        "  (a) the hand-typed copy was removed or wired into a block — delete the entry;\n"
+        "  (b) the doc LOST or RENAMED a member, so the full set no longer matches "
+        "— that is drift. Check the doc before touching this list.")
