@@ -30,10 +30,10 @@ Pick the mode from the user's intent:
   immutable; the on-disk pipeline directory (not the document's UUID identity).
 - `replication_method` (optional, default per source capability) — a member of
   the replication vocabulary in §Closed vocabularies. `cursor_field` is required
-  when the method is incremental.
+  when the method is `incremental`.
 - `write_mode` (optional, default per destination capability) — for a database
   destination, a member of the write-mode vocabulary in §Closed vocabularies
-  (upsert additionally requires `conflict_keys`); for an API destination, one of
+  (`upsert` additionally requires `conflict_keys`); for an API destination, one of
   the endpoint's `operations.write` keys, which no contract enum can enumerate.
 - `schedule_type` (optional) — a member of the schedule vocabulary in
   §Closed vocabularies. Omit it and the contract's own default applies.
