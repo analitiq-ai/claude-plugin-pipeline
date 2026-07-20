@@ -122,7 +122,9 @@ pipelines/
 
 ## Versioning
 
-The plugin's package version in `.claude-plugin/plugin.json` is bumped on PR merge via labels (`version:minor`, `version:patch`, `version:major`) — never bump it manually. `pipeline-drift-classifier` surfaces the structural diff between an authored bundle and a previous release.
+The plugin's package version lives in `src/.claude-plugin/plugin.json` and is edited directly as part of a change that warrants it. Nothing bumps it automatically — there is no label- or workflow-driven release step — so a version move is a deliberate commit like any other.
+
+`pipeline-drift-classifier` surfaces the structural diff between an authored bundle and a previous release. That verdict is informational: it flags structural changes worth thinking about before publishing, and does not drive a version bump.
 
 ## Conventions
 
