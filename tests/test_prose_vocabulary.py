@@ -31,6 +31,9 @@ Detection limits of the heuristic, stated so nobody over-trusts it:
   * a restatement inside a fenced code block using bare (unticked) members is not
     seen. `FENCED_RESTATEMENTS` records the ones that exist today.
   * scope is `*.md` under `src/`.
+  * `_sections()` does not track fenced blocks, so a column-0 `#` inside a fence
+    would split a section early. Zero occurrences across the 39 fences in `src/`
+    today; the failure mode is a missed detection, never a false one.
 """
 from __future__ import annotations
 

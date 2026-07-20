@@ -68,7 +68,6 @@ carries the phrasing tables — and halt rather than inventing a member:
 | `stream.destinations[].write.mode` (database) | `insert`, `upsert` | `ADV-STRM-013` (API modes are endpoint-declared, so the field itself is `str`) |
 <!-- END GENERATED: enum-vocabulary -->
 
-
 ## Required reading
 
 Always load:
