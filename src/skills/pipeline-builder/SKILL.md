@@ -28,13 +28,15 @@ Pick the mode from the user's intent:
 - `destination_connector_id` (required) — the DIP-registry slug of the destination connector.
 - `pipeline_slug` (required) — directory name matching `^[a-z0-9][a-z0-9_-]*$`;
   immutable; the on-disk pipeline directory (not the document's UUID identity).
-- `replication_method` (optional, default per source capability) — one of
-  `full_refresh`, `incremental`. Required `cursor_field` if `incremental`.
-- `write_mode` (optional, default per destination capability) — for API
-  destinations, one of the endpoint's `operations.write` keys; for
-  database destinations, `insert` or `upsert` (the latter requires
-  `conflict_keys`).
-- `schedule_type` (optional, default `manual`) — `manual` / `interval` / `cron`.
+- `replication_method` (optional, default per source capability) — a member of
+  the replication vocabulary in §Closed vocabularies. `cursor_field` is required
+  when the method is `incremental`.
+- `write_mode` (optional, default per destination capability) — for a database
+  destination, a member of the write-mode vocabulary in §Closed vocabularies
+  (`upsert` additionally requires `conflict_keys`); for an API destination, one of
+  the endpoint's `operations.write` keys, which no contract enum can enumerate.
+- `schedule_type` (optional) — a member of the schedule vocabulary in
+  §Closed vocabularies. Omit it and the contract's own default applies.
 - `previous_release_path` (optional) — path to the prior released directory
   of this pipeline. Required for the drift step.
 
@@ -44,6 +46,27 @@ mode".)
 If a required input is missing, ask for it. Ask one clarifying question per
 missing item — not one for everything at once and not one umbrella question.
 Proceed once the user answers.
+
+## Closed vocabularies
+
+Every vocabulary the inputs above resolve against, straight from the pinned
+contract. Map the user's phrasing onto one of these — `references/enum-mappers.md`
+carries the phrasing tables — and halt rather than inventing a member:
+
+<!-- BEGIN GENERATED: enum-vocabulary -->
+| Field | Members | Published as |
+|---|---|---|
+| `pipeline.status` / `stream.status` | `draft`, `active`, `inactive` | `analitiq.contracts.pipelines.config.PipelineInput.status` |
+| `pipeline.schedule.type` | `manual`, `interval`, `cron` | `analitiq.contracts.pipelines.config.Schedule.type` |
+| `pipeline.runtime.logging.log_level` | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` | `analitiq.contracts.pipelines.config.Logging.log_level` |
+| `error_handling.strategy` | `fail`, `dlq`, `skip` | `analitiq.contracts.pipelines.config.ErrorHandling.strategy` |
+| `stream…filters[].operator` | `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `in`, `not_in`, `is_null`, `is_not_null`, `like`, `ilike`, `contains`, `starts_with`, `ends_with` | `analitiq.contracts.stream.Filter.operator` |
+| `stream…validate.rules[].type` | `required`, `not_null`, `min_length`, `max_length`, `pattern`, `range`, `in_list` | `analitiq.contracts.stream.ValidationRule.type` |
+| `stream.source.replication.method` | `full_refresh`, `incremental` | discriminated union `analitiq.contracts.stream.Replication` |
+| `stream.source.database_pagination.type` | `offset`, `keyset` | discriminated union `analitiq.contracts.stream.DatabasePagination` |
+| `…endpoint_ref.scope` | `connector`, `connection` | discriminated union `analitiq.contracts.stream.EndpointRef` |
+| `stream.destinations[].write.mode` (database) | `insert`, `upsert` | `ADV-STRM-013` (API modes are endpoint-declared, so the field itself is `str`) |
+<!-- END GENERATED: enum-vocabulary -->
 
 ## Required reading
 
