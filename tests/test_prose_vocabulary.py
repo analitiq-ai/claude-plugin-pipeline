@@ -45,6 +45,13 @@ What each check does and does not cover, measured:
   | the contract moving under a declared member set | contract-match check     |
   | an allow-listed copy INVENTING a member in place| NOTHING — see below      |
 
+One more thing this gate does not cover at all, by design: it polices closed
+VOCABULARIES and block presence, not every contract fact prose can express.
+"Minimum is 15" written beside an intact `fields-schedule` block passes, even
+though the block emits `min=1` two lines above. Bounds, defaults and requiredness
+asserted in sentences are only protected by being generated in the first place —
+which is why REQUIRED_BLOCKS matters more than the heuristic.
+
 The last row is a real hole, stated rather than papered over.
 `test_allow_listed_restatements_still_match_the_contract` compares the DECLARED
 member set to the contract; it never reads the document. Adding `hourly` beside
