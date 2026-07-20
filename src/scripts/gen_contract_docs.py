@@ -516,73 +516,84 @@ def _render_field_table(module_path: str, class_name: str) -> str:
 
 # --- Closed-enum vocabulary ----------------------------------------------------
 
-def render_enum_vocabulary() -> str:
-    """Vocabularies an author picks a value from, with where each is published.
+def published_vocabularies() -> dict[str, dict]:
+    """Every closed vocabulary an author picks a value from, read off the package.
 
-    Includes `write.mode`, which is closed only for a database destination — an
-    API destination's mode is a key the endpoint declares, so the field itself is
-    an open `str`. That caveat is emitted inline with the row.
+    Single source for both the generated `enum-vocabulary` block and the prose
+    gate in tests/test_prose_vocabulary.py. Restating this list in either place
+    would recreate exactly the drift this module exists to prevent.
+
+    Each value is {label, members, published_as}.
     """
     import importlib
     from typing import get_args
 
-    targets = [
-        ("`pipeline.status` / `stream.status`", "analitiq.contracts.pipelines.config", "PipelineInput", "status"),
-        ("`pipeline.schedule.type`", "analitiq.contracts.pipelines.config", "Schedule", "type"),
-        ("`pipeline.runtime.logging.log_level`", "analitiq.contracts.pipelines.config", "Logging", "log_level"),
-        ("`error_handling.strategy`", "analitiq.contracts.pipelines.config", "ErrorHandling", "strategy"),
-        ("`stream…filters[].operator`", "analitiq.contracts.stream", "Filter", "operator"),
-        ("`stream…validate.rules[].type`", "analitiq.contracts.stream", "ValidationRule", "type"),
-    ]
-    out = ["| Field | Members | Published as |", "|---|---|---|"]
-    for label, module_path, class_name, field in targets:
+    from analitiq.contracts import stream
+
+    vocabularies: dict[str, dict] = {}
+
+    def add(key, label, members, published_as):
+        if not members:
+            raise RuntimeError(
+                f"{key!r} exposed no members; it is no longer a closed vocabulary")
+        vocabularies[key] = {"label": label, "members": list(members),
+                             "published_as": published_as}
+
+    for key, label, module_path, class_name, field in (
+        ("status", "`pipeline.status` / `stream.status`",
+         "analitiq.contracts.pipelines.config", "PipelineInput", "status"),
+        ("schedule.type", "`pipeline.schedule.type`",
+         "analitiq.contracts.pipelines.config", "Schedule", "type"),
+        ("log_level", "`pipeline.runtime.logging.log_level`",
+         "analitiq.contracts.pipelines.config", "Logging", "log_level"),
+        ("error_handling.strategy", "`error_handling.strategy`",
+         "analitiq.contracts.pipelines.config", "ErrorHandling", "strategy"),
+        ("filter.operator", "`stream…filters[].operator`",
+         "analitiq.contracts.stream", "Filter", "operator"),
+        ("validation_rule.type", "`stream…validate.rules[].type`",
+         "analitiq.contracts.stream", "ValidationRule", "type"),
+    ):
         model = getattr(importlib.import_module(module_path), class_name)
         annotation = model.model_fields[field].annotation
-        members = [a for a in get_args(annotation) if isinstance(a, str)]
         # isinstance(str), not truthiness: Optional[Literal[...]] yields
         # (Literal['a','b'], NoneType), whose Literal member is neither None nor a
         # type — a truthy-but-bogus single "member" that would render as
         # "typing.Literal['a','b']" instead of the vocabulary.
-        if not members:
-            raise RuntimeError(
-                f"{class_name}.{field} exposed no string Literal members "
-                f"(annotation {annotation!r}); it is no longer a closed vocabulary")
-        out.append(
-            f"| {label} | {', '.join(f'`{m}`' for m in members)} "
-            f"| `{module_path}.{class_name}.{field}` |"
-        )
+        add(key, label, [a for a in get_args(annotation) if isinstance(a, str)],
+            f"`{module_path}.{class_name}.{field}`")
 
-    # Two vocabularies are not plain Literal fields: replication and pagination are
-    # discriminated unions, so their members live on each variant's discriminator.
-    from analitiq.contracts import stream
-
-    for label, union, union_name, discriminator in (
-        ("`stream.source.replication.method`", stream.Replication, "Replication", "method"),
-        ("`stream.source.database_pagination.type`", stream.DatabasePagination,
-         "DatabasePagination", "type"),
+    # Discriminated unions keep their members on each variant's discriminator.
+    for key, label, union, union_name, discriminator in (
+        ("replication.method", "`stream.source.replication.method`",
+         stream.Replication, "Replication", "method"),
+        ("database_pagination.type", "`stream.source.database_pagination.type`",
+         stream.DatabasePagination, "DatabasePagination", "type"),
     ):
         variants = get_args(get_args(union)[0])
-        members = [get_args(v.model_fields[discriminator].annotation)[0] for v in variants]
-        if not members:
-            raise RuntimeError(f"{union_name} exposed no discriminator members")
-        out.append(
-            f"| {label} | {', '.join(f'`{m}`' for m in members)} "
-            f"| discriminated union `analitiq.contracts.stream.{union_name}` |"
-        )
+        add(key, label,
+            [get_args(v.model_fields[discriminator].annotation)[0] for v in variants],
+            f"discriminated union `analitiq.contracts.stream.{union_name}`")
 
     # `write.mode` is deliberately an open string: a database destination is closed
-    # to the set below, but an API destination's mode is whatever key the endpoint
+    # to this set, but an API destination's mode is whatever key the endpoint
     # declares under operations.write, which no contract enum can enumerate.
-    out.append(
-        f"| `stream.destinations[].write.mode` (database) "
-        f"| {', '.join(f'`{m}`' for m in sorted(stream._DB_WRITE_MODES))} "
-        f"| `ADV-STRM-013` (API modes are endpoint-declared, so the field itself is `str`) |"
-    )
-    out.append(
-        f"| `…endpoint_ref.scope` "
-        f"| `{stream.SCOPE_CONNECTOR}`, `{stream.SCOPE_CONNECTION}` "
-        f"| `analitiq.contracts.stream.SCOPE_CONNECTOR` / `SCOPE_CONNECTION` |"
-    )
+    add("write.mode", "`stream.destinations[].write.mode` (database)",
+        sorted(stream._DB_WRITE_MODES),
+        "`ADV-STRM-013` (API modes are endpoint-declared, so the field itself is `str`)")
+
+    add("endpoint_ref.scope", "`…endpoint_ref.scope`",
+        [stream.SCOPE_CONNECTOR, stream.SCOPE_CONNECTION],
+        "`analitiq.contracts.stream.SCOPE_CONNECTOR` / `SCOPE_CONNECTION`")
+
+    return vocabularies
+
+
+def render_enum_vocabulary() -> str:
+    """Vocabularies an author picks a value from, with where each is published."""
+    out = ["| Field | Members | Published as |", "|---|---|---|"]
+    for vocab in published_vocabularies().values():
+        members = ", ".join(f"`{m}`" for m in vocab["members"])
+        out.append(f"| {vocab['label']} | {members} | {vocab['published_as']} |")
     return "\n".join(out) + "\n"
 
 
