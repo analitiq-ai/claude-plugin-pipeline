@@ -34,6 +34,26 @@ Detection limits of the heuristic, stated so nobody over-trusts it:
   * `_sections()` does not track fenced blocks, so a column-0 `#` inside a fence
     would split a section early. Zero occurrences across the 39 fences in `src/`
     today; the failure mode is a missed detection, never a false one.
+
+What each check does and does not cover, measured:
+
+  | drift                                          | caught by                |
+  |------------------------------------------------|--------------------------|
+  | a generated block deleted from a doc            | REQUIRED_BLOCKS          |
+  | a new hand-typed copy appearing                 | undeclared / count check |
+  | an allow-listed copy DROPPING a member          | staleness check          |
+  | the contract moving under a declared member set | contract-match check     |
+  | an allow-listed copy INVENTING a member in place| NOTHING — see below      |
+
+The last row is a real hole, stated rather than papered over.
+`test_allow_listed_restatements_still_match_the_contract` compares the DECLARED
+member set to the contract; it never reads the document. Adding `hourly` beside
+`manual`/`interval`/`cron` inside an already-allow-listed section keeps the set a
+superset and the occurrence count at 1, so it passes. Closing it would mean
+anchoring each entry to a hash of its section's backticked tokens, which trips on
+every unrelated wording edit in that section — churn that would train people to
+re-baseline the hash without reading, which is worse than the hole. Eight
+sections are exposed; they are the eight in ALLOWED_RESTATEMENTS.
 """
 from __future__ import annotations
 
