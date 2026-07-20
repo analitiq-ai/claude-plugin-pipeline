@@ -17,9 +17,17 @@ explains what each `schedule.type` means has to say `manual`, `interval` and
 appearing with nobody having decided it should be hand-typed. A new restatement
 fails here until someone either wires a block or writes down why not.
 
-Detection is deliberately narrow: members must appear in backticks, and all of
-them within one paragraph. A partial mention ("author `upsert` when the user
-wants merge semantics") is guidance, not a restatement, and does not trip it.
+Detection: members must appear in backticks, and all of them within one markdown
+section. A partial mention ("author `upsert` when the user wants merge
+semantics") is guidance, not a restatement, and does not trip it.
+
+Known limit, deliberate: a restatement written WITHOUT backticks is not detected.
+Dropping the backtick requirement is not an option — members include `in`,
+`range`, `pattern`, `required`, `fail` and `skip`, ordinary English words that
+appear constantly in this prose, so an un-ticked scan would be almost all false
+positives. The house style backticks contract values, so a restatement that
+matches the surrounding style is caught; one that does not is not. This gate
+raises the cost of silent drift, it does not make it impossible.
 """
 from __future__ import annotations
 
@@ -73,23 +81,23 @@ EXCLUDED_FROM_PROSE_GATE = {"endpoint_ref.scope"}
 _TICKED = re.compile(r"`([A-Za-z_][A-Za-z0-9_]*)`")
 
 
-def _paragraphs(text: str):
-    """Yield (start_line, text) for each run of non-blank lines.
+def _sections(text: str):
+    """Yield (start_line, text) for each markdown section — heading to next heading.
 
-    A paragraph keeps a markdown table or bullet list together, which is the unit
-    a restated vocabulary actually occupies.
+    The section, not the paragraph, is the unit. A paragraph unit is evaded by
+    spreading members over consecutive paragraphs under one heading, which reads
+    as a single enumeration to a human. Measured on this repo, section scope finds
+    exactly the same restatements as paragraph scope, so the wider net costs
+    nothing in false positives while closing that gap.
     """
-    buffer, start = [], 0
+    current, start = [], 1
     for lineno, line in enumerate(text.splitlines(), 1):
-        if line.strip():
-            if not buffer:
-                start = lineno
-            buffer.append(line)
-        elif buffer:
-            yield start, "\n".join(buffer)
-            buffer = []
-    if buffer:
-        yield start, "\n".join(buffer)
+        if line.startswith("#") and current:
+            yield start, "\n".join(current)
+            current, start = [], lineno
+        current.append(line)
+    if current:
+        yield start, "\n".join(current)
 
 
 def _restatements():
@@ -104,8 +112,8 @@ def _restatements():
     for path in sorted(G.DOCS_ROOT.rglob("*.md")):
         outside_blocks = G._BLOCK_RE.sub("", path.read_text())
         rel = path.relative_to(G.DOCS_ROOT).as_posix()
-        for start, paragraph in _paragraphs(outside_blocks):
-            ticked = set(_TICKED.findall(paragraph))
+        for start, section in _sections(outside_blocks):
+            ticked = set(_TICKED.findall(section))
             for key, members in vocabularies.items():
                 if members <= ticked:
                     found.append((rel, key, start))
